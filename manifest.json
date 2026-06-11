@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Tabz",
+  "version": "0.1.0",
+  "minimum_chrome_version": "89",
+  "description": "Vim-style tab management that coexists with Vimium: move, group, and regex-close tabs. No data collected, nothing stored.",
+  "permissions": ["tabs", "tabGroups"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*", "file://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
+  "commands": {
+    "move-left": {
+      "suggested_key": { "default": "Alt+Shift+Comma" },
+      "description": "Move tab left"
+    },
+    "move-right": {
+      "suggested_key": { "default": "Alt+Shift+Period" },
+      "description": "Move tab right"
+    },
+    "create-group": {
+      "suggested_key": { "default": "Alt+Shift+C" },
+      "description": "Group current tab (auto-named)"
+    },
+    "ungroup": {
+      "suggested_key": { "default": "Alt+Shift+Q" },
+      "description": "Remove current tab from its group"
+    }
+  }
+}
