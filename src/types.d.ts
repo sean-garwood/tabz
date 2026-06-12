@@ -16,6 +16,8 @@ type TabzAction =
     | "dissolveGroup"
     | "regexClose";
 
+// TODO: leader/keys can only be one key.
+// TODO: leader/keys must be in allowable range defined in the regex
 interface TabzConfig {
     leader: string;
     keys: Record<TabzAction, string>;
