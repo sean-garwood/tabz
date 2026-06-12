@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "fmt": "prettier --write '**/*.{js,json,ts}'",
     "test": "vitest run",
     "test:watch": "vitest"
   },
