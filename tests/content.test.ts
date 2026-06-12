@@ -70,6 +70,11 @@ test("zero extends a count in progress: 2s0w moves left by twenty", () => {
     expect(results[3].command).toEqual({ type: "move", delta: -20 });
 });
 
+test("20sw moves left by twenty", () => {
+    const results = feedAll(parser, ["2", "0", "s", "w"]);
+    expect(results[3].command).toEqual({ type: "move", delta: -20 });
+});
+
 test("bare s0 moves to the start and s$ to the end", () => {
     expect(feedAll(parser, ["s", "0"])[1].command).toEqual({
         type: "moveEdge",
