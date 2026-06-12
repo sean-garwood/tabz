@@ -204,12 +204,10 @@ function createHud(send) {
 
 function install() {
     const send = (msg) =>
-        chrome.runtime
-            .sendMessage(msg)
-            .catch((err) => ({
-                ok: false,
-                notice: `Tabz: ${err.message || err}`,
-            }));
+        chrome.runtime.sendMessage(msg).catch((err) => ({
+            ok: false,
+            notice: `Tabz: ${err.message || err}`,
+        }));
     const hud = createHud(send);
     const parser = createSequenceParser();
 
