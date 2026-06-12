@@ -2,11 +2,12 @@
   "manifest_version": 3,
   "name": "Tabz",
   "version": "0.1.0",
-  "minimum_chrome_version": "89",
+  "minimum_chrome_version": "91",
   "description": "Vim-style tab management that coexists with Vimium: move, group, and regex-close tabs. Configurable keys; no data collected.",
   "permissions": ["tabs", "tabGroups", "storage"],
   "background": {
-    "service_worker": "dist/background.js"
+    "service_worker": "dist/background.js",
+    "type": "module"
   },
   "options_ui": {
     "page": "options.html",

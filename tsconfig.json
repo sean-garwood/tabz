@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
-    // ES2021 is fully supported by Chrome 89, the manifest's
-    // minimum_chrome_version; bump both together.
+    // ES2021 is fully supported by Chrome 91, the manifest's
+    // minimum_chrome_version (set by module service worker support);
+    // bump both together.
     "target": "ES2021",
     "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "module": "ESNext",

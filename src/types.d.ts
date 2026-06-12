@@ -1,7 +1,9 @@
 // Shared message protocol between the content script and the service worker.
-// Ambient declarations (no imports/exports) keep both source files classic
-// scripts: MV3 content scripts cannot be ES modules, so the compiled output
-// must have no module wrapper.
+// Ambient declarations (no imports/exports) are visible to every file, which
+// matters for the page-side scripts (messaging.ts, content.ts, options.ts):
+// MV3 content scripts cannot be ES modules, so their compiled output must
+// have no module wrapper. The service worker side (background.ts, config.ts)
+// is an ES module and uses these types without importing them.
 
 // One name per user-facing operation; config.json and chrome.storage key
 // bindings by these names, and the content script maps them to commands.
@@ -17,7 +19,7 @@ type TabzAction =
     | "regexClose";
 
 // Leader and keys are single characters from the bindable set; that constraint
-// lives in the service worker's config schema (CONFIG_SCHEMA in background.ts)
+// lives in the service worker's config schema (CONFIG_SCHEMA in config.ts)
 // because the values arrive at runtime from JSON and user input, where the
 // type system cannot enforce it.
 interface TabzConfig {

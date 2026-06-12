@@ -154,7 +154,8 @@ tabz/
   manifest.json      MV3 manifest: permissions, content script, options, commands
   config.json        default key bindings (leader + one key per action)
   options.html       key-binding editor page
-  src/background.ts  service worker; chrome.tabs/tabGroups calls, config owner
+  src/background.ts  service worker (ES module); chrome.tabs/tabGroups calls
+  src/config.ts      key-binding schema, defaults, parsing, and validation
   src/content.ts     key sequence parser + HUD overlay; messages the worker
   src/options.ts     options page logic; validates via the service worker
   tests/             vitest unit tests + chrome API mock
@@ -165,8 +166,10 @@ npm install
 npm test        # builds src/ to dist/, then runs vitest
 ```
 
-The compiled extension scripts are plain browser scripts; tests evaluate them
-in-realm with a mocked `chrome` API shadowing the global.
+The service worker compiles to an ES module that tests import with a mocked
+`chrome` API stubbed onto the global; the page-side scripts compile to plain
+browser scripts that tests evaluate in-realm with the mock shadowing the
+global.
 
 ## License
 

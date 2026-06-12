@@ -1,9 +1,8 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
     createChromeMock,
     defaultConfig,
     fetchMock,
-    loadScript,
     windowOrder,
     tabById,
     type MockGroup,
@@ -21,17 +20,22 @@ interface BackgroundExports {
     GROUP_COLORS: readonly string[];
 }
 
-function setup(
+// The worker is an ES module, so unlike the content script it is imported
+// for real: the chrome/fetch globals are stubbed first, and the module
+// registry is reset so each test evaluates a fresh instance bound to its own
+// mock.
+async function setup(
     tabs: MockTabInit[],
     groups?: Record<number, MockGroup>,
     stored?: Record<string, unknown>,
 ) {
     const { chrome, state } = createChromeMock({ tabs, groups, stored });
-    const exports = loadScript<BackgroundExports>(
-        "dist/background.js",
-        { chrome, fetch: fetchMock },
-        ["handleMessage", "groupTitleFor", "groupColorFor", "GROUP_COLORS"],
-    );
+    vi.stubGlobal("chrome", chrome);
+    vi.stubGlobal("fetch", fetchMock);
+    vi.resetModules();
+    // @ts-expect-error: dist/ is compiled output with no declaration files
+    const module = await import("../dist/background.js");
+    const exports = module as BackgroundExports;
     return {
         state,
         exports,
@@ -41,26 +45,38 @@ function setup(
 }
 
 test("move shifts the tab by delta", async () => {
-    const { state, handle, sender } = setup([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    const { state, handle, sender } = await setup([
+        { id: 1 },
+        { id: 2 },
+        { id: 3 },
+    ]);
     const res = await handle({ type: "move", delta: 1 }, sender(2));
     expect(res.ok).toBe(true);
     expect(windowOrder(state, 1)).toEqual([1, 3, 2]);
 });
 
 test("move clamps at the right edge", async () => {
-    const { state, handle, sender } = setup([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    const { state, handle, sender } = await setup([
+        { id: 1 },
+        { id: 2 },
+        { id: 3 },
+    ]);
     await handle({ type: "move", delta: 99 }, sender(1));
     expect(windowOrder(state, 1)).toEqual([2, 3, 1]);
 });
 
 test("move clamps at the left edge", async () => {
-    const { state, handle, sender } = setup([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    const { state, handle, sender } = await setup([
+        { id: 1 },
+        { id: 2 },
+        { id: 3 },
+    ]);
     await handle({ type: "move", delta: -5 }, sender(1));
     expect(windowOrder(state, 1)).toEqual([1, 2, 3]);
 });
 
 test("unpinned tab cannot move into the pinned region", async () => {
-    const { state, handle, sender } = setup([
+    const { state, handle, sender } = await setup([
         { id: 1, pinned: true },
         { id: 2, pinned: true },
         { id: 3 },
@@ -71,7 +87,7 @@ test("unpinned tab cannot move into the pinned region", async () => {
 });
 
 test("pinned tab stays inside the pinned region", async () => {
-    const { state, handle, sender } = setup([
+    const { state, handle, sender } = await setup([
         { id: 1, pinned: true },
         { id: 2, pinned: true },
         { id: 3 },
@@ -82,7 +98,7 @@ test("pinned tab stays inside the pinned region", async () => {
 });
 
 test("moveEdge start lands just after the pinned region", async () => {
-    const { state, handle, sender } = setup([
+    const { state, handle, sender } = await setup([
         { id: 1, pinned: true },
         { id: 2, pinned: true },
         { id: 3 },
@@ -93,13 +109,17 @@ test("moveEdge start lands just after the pinned region", async () => {
 });
 
 test("moveEdge end moves to the last position", async () => {
-    const { state, handle, sender } = setup([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    const { state, handle, sender } = await setup([
+        { id: 1 },
+        { id: 2 },
+        { id: 3 },
+    ]);
     await handle({ type: "moveEdge", edge: "end" }, sender(1));
     expect(windowOrder(state, 1)).toEqual([2, 3, 1]);
 });
 
 test("createGroup auto-names from the hostname and picks a palette color", async () => {
-    const { state, handle, sender, exports } = setup([
+    const { state, handle, sender, exports } = await setup([
         { id: 1, url: "https://www.github.com/foo" },
     ]);
     const res = await handle({ type: "createGroup" }, sender(1));
@@ -110,15 +130,15 @@ test("createGroup auto-names from the hostname and picks a palette color", async
     expect(exports.GROUP_COLORS).toContain(state.groups[100].color);
 });
 
-test("groupColorFor is deterministic", () => {
-    const { exports } = setup([]);
+test("groupColorFor is deterministic", async () => {
+    const { exports } = await setup([]);
     expect(exports.groupColorFor("github.com")).toBe(
         exports.groupColorFor("github.com"),
     );
 });
 
-test("groupTitleFor falls back and strips www", () => {
-    const { exports } = setup([]);
+test("groupTitleFor falls back and strips www", async () => {
+    const { exports } = await setup([]);
     expect(exports.groupTitleFor("https://www.github.com/x")).toBe(
         "github.com",
     );
@@ -127,7 +147,7 @@ test("groupTitleFor falls back and strips www", () => {
 });
 
 test("joinGroup prefers the left group on a distance tie", async () => {
-    const { state, handle, sender } = setup(
+    const { state, handle, sender } = await setup(
         [{ id: 1, groupId: 5 }, { id: 2 }, { id: 3, groupId: 7 }],
         { 5: { title: "left" }, 7: { title: "right" } },
     );
@@ -137,7 +157,7 @@ test("joinGroup prefers the left group on a distance tie", async () => {
 });
 
 test("joinGroup falls back to the nearest group on the right", async () => {
-    const { state, handle, sender } = setup(
+    const { state, handle, sender } = await setup(
         [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4, groupId: 7 }],
         { 7: { title: "right" } },
     );
@@ -147,13 +167,13 @@ test("joinGroup falls back to the nearest group on the right", async () => {
 });
 
 test("joinGroup reports when no group exists", async () => {
-    const { handle, sender } = setup([{ id: 1 }, { id: 2 }]);
+    const { handle, sender } = await setup([{ id: 1 }, { id: 2 }]);
     const res = await handle({ type: "joinGroup" }, sender(1));
     expect(res).toEqual({ ok: false, notice: "No group nearby" });
 });
 
 test("ungroup removes only the current tab", async () => {
-    const { state, handle, sender } = setup([
+    const { state, handle, sender } = await setup([
         { id: 1, groupId: 5 },
         { id: 2, groupId: 5 },
     ]);
@@ -164,13 +184,13 @@ test("ungroup removes only the current tab", async () => {
 });
 
 test("ungroup reports when the tab is not grouped", async () => {
-    const { handle, sender } = setup([{ id: 1 }]);
+    const { handle, sender } = await setup([{ id: 1 }]);
     const res = await handle({ type: "ungroup" }, sender(1));
     expect(res).toEqual({ ok: false, notice: "Not in a group" });
 });
 
 test("dissolveGroup ungroups every member and nothing else", async () => {
-    const { state, handle, sender } = setup([
+    const { state, handle, sender } = await setup([
         { id: 1, groupId: 5 },
         { id: 2, groupId: 5 },
         { id: 3, groupId: 9 },
@@ -200,7 +220,7 @@ const REGEX_FIXTURE: MockTabInit[] = [
 ];
 
 test("countMatches checks url and title, skips pinned and other windows", async () => {
-    const { handle, sender } = setup(REGEX_FIXTURE);
+    const { handle, sender } = await setup(REGEX_FIXTURE);
     const res = await handle(
         { type: "countMatches", pattern: "news" },
         sender(1),
@@ -209,13 +229,13 @@ test("countMatches checks url and title, skips pinned and other windows", async 
 });
 
 test("countMatches rejects an invalid regex", async () => {
-    const { handle, sender } = setup(REGEX_FIXTURE);
+    const { handle, sender } = await setup(REGEX_FIXTURE);
     const res = await handle({ type: "countMatches", pattern: "[" }, sender(1));
     expect(res).toEqual({ ok: false, notice: "Invalid regex" });
 });
 
 test("closeMatches removes exactly the matching tabs", async () => {
-    const { state, handle, sender } = setup(REGEX_FIXTURE);
+    const { state, handle, sender } = await setup(REGEX_FIXTURE);
     const res = await handle(
         { type: "closeMatches", pattern: "news" },
         sender(1),
@@ -227,7 +247,7 @@ test("closeMatches removes exactly the matching tabs", async () => {
 });
 
 test("closeMatches with no matches removes nothing", async () => {
-    const { state, handle, sender } = setup(REGEX_FIXTURE);
+    const { state, handle, sender } = await setup(REGEX_FIXTURE);
     const res = await handle(
         { type: "closeMatches", pattern: "zzzzz" },
         sender(1),
@@ -237,7 +257,7 @@ test("closeMatches with no matches removes nothing", async () => {
 });
 
 test("onMessage listener responds asynchronously and returns true", async () => {
-    const { state } = setup([{ id: 1 }]);
+    const { state } = await setup([{ id: 1 }]);
     const res = await new Promise<TabzResponse>((resolve) => {
         const returned = state.listeners.message!(
             { type: "ungroup" },
@@ -250,7 +270,11 @@ test("onMessage listener responds asynchronously and returns true", async () => 
 });
 
 test("keyboard command acts on the active tab", async () => {
-    const { state } = setup([{ id: 1, active: true }, { id: 2 }, { id: 3 }]);
+    const { state } = await setup([
+        { id: 1, active: true },
+        { id: 2 },
+        { id: 3 },
+    ]);
     await state.listeners.command!("move-right");
     expect(windowOrder(state, 1)).toEqual([2, 1, 3]);
 });
@@ -261,7 +285,7 @@ function payloadOf(res: TabzResponseFor<"getConfig">): TabzConfigPayload {
 }
 
 test("getConfig returns the config.json defaults when storage is empty", async () => {
-    const { handle } = setup([]);
+    const { handle } = await setup([]);
     const payload = payloadOf(await handle({ type: "getConfig" }));
     expect(payload.defaults).toEqual(defaultConfig());
     expect(payload.current).toEqual(payload.defaults);
@@ -269,7 +293,7 @@ test("getConfig returns the config.json defaults when storage is empty", async (
 });
 
 test("getConfig overlays a partial stored config onto the defaults", async () => {
-    const { handle } = setup([], undefined, {
+    const { handle } = await setup([], undefined, {
         config: { keys: { moveLeft: "h" } },
     });
     const { current } = payloadOf(await handle({ type: "getConfig" }));
@@ -281,7 +305,7 @@ test("getConfig overlays a partial stored config onto the defaults", async () =>
 test("getConfig falls back to defaults when bindings collide, with a warning", async () => {
     const stored = defaultConfig();
     stored.keys.moveLeft = "e";
-    const { handle } = setup([], undefined, { config: stored });
+    const { handle } = await setup([], undefined, { config: stored });
     const { current, warnings } = payloadOf(
         await handle({ type: "getConfig" }),
     );
@@ -291,7 +315,7 @@ test("getConfig falls back to defaults when bindings collide, with a warning", a
 });
 
 test("getConfig keeps valid overrides and warns about invalid ones", async () => {
-    const { handle } = setup([], undefined, {
+    const { handle } = await setup([], undefined, {
         config: {
             leader: "<script>alert(1)</script>",
             keys: {
@@ -310,14 +334,14 @@ test("getConfig keeps valid overrides and warns about invalid ones", async () =>
 });
 
 test("getConfig warns and uses defaults when the stored config is not an object", async () => {
-    const { handle } = setup([], undefined, { config: "<script>" });
+    const { handle } = await setup([], undefined, { config: "<script>" });
     const payload = payloadOf(await handle({ type: "getConfig" }));
     expect(payload.current).toEqual(defaultConfig());
     expect(payload.warnings).toHaveLength(1);
 });
 
 test("getConfig warns about unknown actions without dropping valid ones", async () => {
-    const { handle } = setup([], undefined, {
+    const { handle } = await setup([], undefined, {
         config: { keys: { moveLeft: "h", evalArbitraryCode: "z" } },
     });
     const { current, warnings } = payloadOf(
@@ -328,7 +352,7 @@ test("getConfig warns about unknown actions without dropping valid ones", async 
 });
 
 test("setConfig persists a valid config and getConfig reflects it", async () => {
-    const { state, handle } = setup([]);
+    const { state, handle } = await setup([]);
     const config = defaultConfig();
     config.leader = ",";
     config.keys.regexClose = ";";
@@ -340,7 +364,7 @@ test("setConfig persists a valid config and getConfig reflects it", async () => 
 });
 
 test("setConfig rejects a key outside the allowed set", async () => {
-    const { state, handle } = setup([]);
+    const { state, handle } = await setup([]);
     for (const bad of ["1", "ww", "", "!"]) {
         const config = defaultConfig();
         config.keys.moveLeft = bad;
@@ -351,7 +375,7 @@ test("setConfig rejects a key outside the allowed set", async () => {
 });
 
 test("setConfig rejects duplicate bindings", async () => {
-    const { handle } = setup([]);
+    const { handle } = await setup([]);
     const config = defaultConfig();
     config.keys.moveLeft = "e";
     const res = await handle({ type: "setConfig", config });
@@ -360,13 +384,13 @@ test("setConfig rejects duplicate bindings", async () => {
 });
 
 test("setConfig allows a binding equal to the leader, vim ss-style", async () => {
-    const { handle } = setup([]);
+    const { handle } = await setup([]);
     const res = await handle({ type: "setConfig", config: defaultConfig() });
     expect(res.ok).toBe(true);
 });
 
 test("setConfig rejects a digit leader", async () => {
-    const { handle } = setup([]);
+    const { handle } = await setup([]);
     const config = defaultConfig();
     config.leader = "0";
     const res = await handle({ type: "setConfig", config });
@@ -374,7 +398,7 @@ test("setConfig rejects a digit leader", async () => {
 });
 
 test("setConfig rejects an unknown action", async () => {
-    const { handle } = setup([]);
+    const { handle } = await setup([]);
     const config = defaultConfig() as TabzConfig & {
         keys: Record<string, string>;
     };
@@ -384,7 +408,7 @@ test("setConfig rejects an unknown action", async () => {
 });
 
 test("validateConfig reports errors without persisting anything", async () => {
-    const { state, handle } = setup([]);
+    const { state, handle } = await setup([]);
     const config = defaultConfig();
     config.keys.ungroup = "3";
     expect((await handle({ type: "validateConfig", config })).ok).toBe(false);
