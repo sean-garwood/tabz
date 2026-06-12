@@ -8,11 +8,12 @@ Tabz is a Manifest V3 Chrome extension providing vim-style keyboard shortcuts fo
 
 ## Architecture
 
-Three-file MV3 extension:
+MV3 extension written in TypeScript, compiled with plain `tsc` (no bundler) to classic scripts in `dist/`, which is what the manifest loads:
 
-- `manifest.json`: declares permissions (`tabs`, `tabGroups` only — no host permissions, no `<all_urls>`), registers service worker, content script, and `chrome.commands` entries
-- `background.js`: service worker; owns all `chrome.tabs.*` and `chrome.tabGroups.*` calls; receives messages from content script and executes them
-- `content.js`: thin key listener injected into pages; parses key sequences (including count prefixes like `3<key>`); sends messages to service worker; renders the regex input overlay (single `<input>`, `Enter` to execute, `Esc` to cancel)
+- `manifest.json`: declares permissions (`tabs`, `tabGroups` only — no host permissions, no `<all_urls>`), registers service worker (`dist/background.js`), content script (`dist/content.js`), and `chrome.commands` entries
+- `src/background.ts`: service worker; owns all `chrome.tabs.*` and `chrome.tabGroups.*` calls; receives messages from content script and executes them
+- `src/content.ts`: thin key listener injected into pages; parses key sequences (including count prefixes like `3<key>`); sends messages to service worker; renders the regex input overlay (single `<input>`, `Enter` to execute, `Esc` to cancel)
+- `src/types.d.ts`: the message protocol both scripts share, as ambient declarations. **No top-level `import`/`export` in `src/`**: MV3 content scripts cannot be ES modules, so both files must stay classic scripts (tsc then emits them 1:1 with no module wrapper). Compile target is ES2021, the newest syntax fully supported by `minimum_chrome_version: 89` — bump both together or neither.
 
 The content script does **no DOM mutation** beyond the regex overlay. All tab/group operations go through the service worker via `chrome.runtime.sendMessage`.
 
@@ -33,7 +34,8 @@ The content script does **no DOM mutation** beyond the regex overlay. All tab/gr
 - Distinct keys instead of overriding Vimium's `<<`/`>>` (override would require winning the listener race; see Key constraints)
 - Group "delete" is non-destructive: `sQ` dissolves the group (ungroups members), closes nothing
 - No persistence of any kind: no chrome.storage, no localStorage, no network; service worker is stateless
-- Zero **runtime** dependencies is a hard rule (nothing from npm ships in the extension); devDependencies are fine when tried-and-true and few — currently only Vitest
+- Zero **runtime** dependencies is a hard rule (nothing from npm ships in the extension); devDependencies are fine when tried-and-true and few — currently Vitest, TypeScript, and type packages (`@types/chrome`, `@types/node`)
+- TypeScript via plain `tsc`, no bundler: the two scripts share no runtime code, so nothing needs bundling; shared types live in ambient `src/types.d.ts`
 
 ## Keybindings (final)
 
@@ -50,10 +52,10 @@ Leader is `s`. Counts go before or after the leader (`3sw` or `s3w`), move comma
 
 ## Testing
 
-`npm test` (Vitest; run `npm install` first). Vitest is the only devDependency — the extension itself stays dependency-free, and nothing from npm ships to users. Tests evaluate the plain browser scripts in-realm via `loadScript` in `tests/chrome-mock.js`: the script source is wrapped in `new Function`, with sandbox entries (e.g. the mocked `chrome`) shadowing globals as parameters, and the requested top-level bindings returned by name. This imposes nothing on the source files — `function`, `const`, and `let` bindings all work — and avoids cross-realm prototype issues entirely.
+`npm test` (Vitest; run `npm install` first). `pretest` runs `npm run build`, so tests always exercise the compiled `dist/` output — the exact scripts that ship. `npm run typecheck` type-checks sources and tests without emitting. Tests evaluate the compiled scripts in-realm via `loadScript` in `tests/chrome-mock.ts`: the script source is wrapped in `new Function`, with sandbox entries (e.g. the mocked `chrome`) shadowing globals as parameters, and the requested top-level bindings returned by name. This imposes nothing on the source files — `function`, `const`, and `let` bindings all work — and avoids cross-realm prototype issues entirely.
 
 ## Loading the extension locally
 
-Chrome: `chrome://extensions` > enable Developer mode > Load unpacked > select repo root.
+Chrome: run `npm run build` first (the manifest points at `dist/`, which is gitignored), then `chrome://extensions` > enable Developer mode > Load unpacked > select repo root.
 
-After editing `background.js` or `manifest.json`, click the refresh icon on the extension card. Content script changes take effect on the next page load (no extension reload needed).
+After editing `src/background.ts` or `manifest.json`, rebuild and click the refresh icon on the extension card. `src/content.ts` changes take effect on the next page load after a rebuild (no extension reload needed).

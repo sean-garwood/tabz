@@ -1,20 +1,34 @@
 import { expect, test } from "vitest";
-import { loadScript } from "./chrome-mock.js";
+import { loadScript } from "./chrome-mock";
+
+interface ParseResult {
+  handled: boolean;
+  command?: TabzCommand;
+}
+
+interface ContentExports {
+  createSequenceParser: (now?: () => number) => {
+    feed: (key: string) => ParseResult;
+    reset: () => void;
+  };
+  isEditableTarget: (event: unknown) => boolean;
+}
 
 // No chrome in the sandbox, so the script's install() guard keeps it from
 // wiring up any DOM listeners.
-const { createSequenceParser, isEditableTarget } = loadScript("content.js", {}, [
-  "createSequenceParser",
-  "isEditableTarget",
-]);
+const { createSequenceParser, isEditableTarget } = loadScript<ContentExports>(
+  "dist/content.js",
+  {},
+  ["createSequenceParser", "isEditableTarget"]
+);
 
 function makeParser() {
   let t = 1000;
   const parser = createSequenceParser(() => t);
-  return { parser, tick: (ms) => (t += ms) };
+  return { parser, tick: (ms: number) => (t += ms) };
 }
 
-function feedAll(parser, keys) {
+function feedAll(parser: ReturnType<typeof createSequenceParser>, keys: string[]) {
   return keys.map((k) => parser.feed(k));
 }
 
@@ -96,7 +110,7 @@ test("Escape while idle clears a pending count and passes through", () => {
 });
 
 test("isEditableTarget recognizes inputs and contenteditable", () => {
-  const evt = (el) => ({ composedPath: () => [el], target: el });
+  const evt = (el: unknown) => ({ composedPath: () => [el], target: el });
   expect(isEditableTarget(evt({ nodeType: 1, tagName: "INPUT" }))).toBe(true);
   expect(isEditableTarget(evt({ nodeType: 1, tagName: "TEXTAREA" }))).toBe(true);
   expect(isEditableTarget(evt({ nodeType: 1, tagName: "DIV", isContentEditable: true }))).toBe(

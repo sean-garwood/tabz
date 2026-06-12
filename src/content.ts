@@ -11,7 +11,7 @@ const COUNT_LIMIT = 99;
 const TOAST_MS = 1600;
 const PREVIEW_DEBOUNCE_MS = 80;
 
-const SEQUENCE_COMMANDS = {
+const SEQUENCE_COMMANDS: Record<string, (count: number) => TabzCommand> = {
   "w": (count) => ({ type: "move", delta: -count }),
   "e": (count) => ({ type: "move", delta: count }),
   "0": () => ({ type: "moveEdge", edge: "start" }),
@@ -23,17 +23,22 @@ const SEQUENCE_COMMANDS = {
   "s": () => ({ type: "prompt" }),
 };
 
-function createSequenceParser(now = Date.now) {
+interface ParseResult {
+  handled: boolean;
+  command?: TabzCommand;
+}
+
+function createSequenceParser(now: () => number = Date.now) {
   let countBuf = "";
   let pending = false;
   let lastAt = 0;
 
-  function reset() {
+  function reset(): void {
     countBuf = "";
     pending = false;
   }
 
-  function feed(key) {
+  function feed(key: string): ParseResult {
     const at = now();
     if (at - lastAt > SEQUENCE_TIMEOUT_MS) reset();
     lastAt = at;
@@ -74,20 +79,28 @@ function createSequenceParser(now = Date.now) {
   return { feed, reset };
 }
 
-function isEditableTarget(event) {
-  const el = (event.composedPath && event.composedPath()[0]) || event.target;
-  if (!el || el.nodeType !== 1) return false;
+function isEditableTarget(event: Event): boolean {
+  const target = (event.composedPath && event.composedPath()[0]) || event.target;
+  if (!target || (target as Node).nodeType !== 1) return false;
+  const el = target as HTMLElement;
   return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
 }
 
-function createHud(send) {
-  let host = null;
-  let shadow = null;
-  let prompt = null;
-  let toastTimer = 0;
-  let previewTimer = 0;
+type SendFn = (msg: TabzMessage) => Promise<TabzResponse>;
 
-  function render(body) {
+interface PromptRefs {
+  input: HTMLInputElement;
+  status: HTMLSpanElement;
+}
+
+function createHud(send: SendFn) {
+  let host: HTMLElement | null = null;
+  let shadow: ShadowRoot | null = null;
+  let prompt: PromptRefs | null = null;
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  let previewTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function render(body: string): ShadowRoot {
     if (!host || !host.isConnected) {
       host = document.createElement("tabz-hud");
       host.style.cssText =
@@ -96,7 +109,7 @@ function createHud(send) {
       shadow = host.attachShadow({ mode: "open" });
       (document.body || document.documentElement).appendChild(host);
     }
-    shadow.innerHTML = `<style>
+    shadow!.innerHTML = `<style>
       :host { all: initial; }
       .box { display: flex; align-items: center; gap: 8px; white-space: nowrap;
              font: 12px/1.4 system-ui, sans-serif; color: #e6edf3; background: #1c2128;
@@ -108,30 +121,31 @@ function createHud(send) {
       .status { color: #8b949e; min-width: 80px; }
       .status.err { color: #f85149; }
     </style>${body}`;
+    return shadow!;
   }
 
-  function close() {
+  function close(): void {
     clearTimeout(previewTimer);
     prompt = null;
     if (host) host.remove();
   }
 
-  function toast(text) {
-    render('<div class="box"><span class="msg"></span></div>');
-    shadow.querySelector(".msg").textContent = text;
+  function toast(text: string): void {
+    const root = render('<div class="box"><span class="msg"></span></div>');
+    root.querySelector(".msg")!.textContent = text;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
       if (!prompt) close();
     }, TOAST_MS);
   }
 
-  function setStatus(text, isError) {
+  function setStatus(text: string, isError: boolean): void {
     if (!prompt) return;
     prompt.status.textContent = text;
     prompt.status.className = isError ? "status err" : "status";
   }
 
-  function schedulePreview() {
+  function schedulePreview(): void {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(async () => {
       if (!prompt) return;
@@ -139,30 +153,36 @@ function createHud(send) {
       if (!pattern) return setStatus("", false);
       const res = await send({ type: "countMatches", pattern });
       if (!prompt || prompt.input.value !== pattern) return;
-      setStatus(res.ok ? `${res.count} match${res.count === 1 ? "" : "es"}` : res.notice, !res.ok);
+      setStatus(
+        res.ok ? `${res.count} match${res.count === 1 ? "" : "es"}` : res.notice || "",
+        !res.ok
+      );
     }, PREVIEW_DEBOUNCE_MS);
   }
 
-  async function submit() {
+  async function submit(): Promise<void> {
     if (!prompt) return;
     const pattern = prompt.input.value;
     if (!pattern) return close();
     const res = await send({ type: "closeMatches", pattern });
     if (!prompt) return;
-    if (res.ok && res.count > 0) {
+    if (res.ok && res.count! > 0) {
       close();
-      toast(res.notice);
+      toast(res.notice || "");
     } else {
-      setStatus(res.ok ? "0 matches" : res.notice, !res.ok);
+      setStatus(res.ok ? "0 matches" : res.notice || "", !res.ok);
     }
   }
 
-  function openPrompt() {
-    render(
+  function openPrompt(): void {
+    const root = render(
       '<div class="box"><span>close tabs matching</span>' +
         '<input type="text" spellcheck="false" autocomplete="off"><span class="status"></span></div>'
     );
-    prompt = { input: shadow.querySelector("input"), status: shadow.querySelector(".status") };
+    prompt = {
+      input: root.querySelector("input")!,
+      status: root.querySelector(".status")!,
+    };
     prompt.input.addEventListener("input", schedulePreview);
     prompt.input.addEventListener("blur", close);
     prompt.input.focus();
@@ -172,7 +192,7 @@ function createHud(send) {
   // other extension listening on window; characters still land in the input
   // through the browser's default action, which stopImmediatePropagation does
   // not cancel.
-  function handlePromptKey(event) {
+  function handlePromptKey(event: KeyboardEvent): void {
     event.stopImmediatePropagation();
     if (event.key === "Enter") {
       event.preventDefault();
@@ -186,9 +206,11 @@ function createHud(send) {
   return { toast, openPrompt, handlePromptKey, promptOpen: () => prompt !== null };
 }
 
-function install() {
-  const send = (msg) =>
-    chrome.runtime.sendMessage(msg).catch((err) => ({ ok: false, notice: `Tabz: ${err.message || err}` }));
+function install(): void {
+  const send: SendFn = (msg) =>
+    chrome.runtime
+      .sendMessage(msg)
+      .catch((err: Error) => ({ ok: false, notice: `Tabz: ${err.message || err}` }));
   const hud = createHud(send);
   const parser = createSequenceParser();
 

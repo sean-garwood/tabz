@@ -3,10 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/chrome": "^0.1.43",
+    "@types/node": "^25.9.3",
+    "typescript": "^6.0.3",
     "vitest": "^3.2.4"
   }
 }

@@ -4,46 +4,50 @@
 
 const NO_GROUP = -1;
 
-const GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
+type GroupColor = `${chrome.tabGroups.Color}`;
 
-const COMMAND_MESSAGES = {
+const GROUP_COLORS: GroupColor[] = [
+  "grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange",
+];
+
+const COMMAND_MESSAGES: Record<string, TabzMessage> = {
   "move-left": { type: "move", delta: -1 },
   "move-right": { type: "move", delta: 1 },
   "create-group": { type: "createGroup" },
   "ungroup": { type: "ungroup" },
 };
 
-function groupTitleFor(url) {
+function groupTitleFor(url: string | undefined): string {
   try {
-    const host = new URL(url).hostname.replace(/^www\./, "");
+    const host = new URL(url ?? "").hostname.replace(/^www\./, "");
     return host || "tabs";
   } catch {
     return "tabs";
   }
 }
 
-function groupColorFor(title) {
+function groupColorFor(title: string): GroupColor {
   let hash = 0;
-  for (const ch of title) hash = (hash * 31 + ch.codePointAt(0)) % 9973;
+  for (const ch of title) hash = (hash * 31 + ch.codePointAt(0)!) % 9973;
   return GROUP_COLORS[hash % GROUP_COLORS.length];
 }
 
 // Pinned tabs occupy a contiguous region at the start of the strip; a move
 // must stay inside the tab's own region or Chrome rejects it.
-function moveBounds(tabs, tab) {
+function moveBounds(tabs: chrome.tabs.Tab[], tab: chrome.tabs.Tab): { min: number; max: number } {
   const pinnedCount = tabs.filter((t) => t.pinned).length;
   return tab.pinned
     ? { min: 0, max: pinnedCount - 1 }
     : { min: pinnedCount, max: tabs.length - 1 };
 }
 
-function clampMoveIndex(tabs, tab, delta) {
+function clampMoveIndex(tabs: chrome.tabs.Tab[], tab: chrome.tabs.Tab, delta: number): number {
   const { min, max } = moveBounds(tabs, tab);
   return Math.min(max, Math.max(min, tab.index + delta));
 }
 
 // Nearest grouped tab by distance; the left one wins a tie.
-function findNearestGroupId(tabs, index) {
+function findNearestGroupId(tabs: chrome.tabs.Tab[], index: number): number {
   for (let left = index - 1, right = index + 1; left >= 0 || right < tabs.length; left--, right++) {
     if (left >= 0 && tabs[left].groupId !== NO_GROUP) return tabs[left].groupId;
     if (right < tabs.length && tabs[right].groupId !== NO_GROUP) return tabs[right].groupId;
@@ -51,44 +55,49 @@ function findNearestGroupId(tabs, index) {
   return NO_GROUP;
 }
 
-function filterByPattern(tabs, pattern) {
+function filterByPattern(tabs: chrome.tabs.Tab[], pattern: string): chrome.tabs.Tab[] {
   const re = new RegExp(pattern, "i");
   return tabs.filter((t) => !t.pinned && (re.test(t.url || "") || re.test(t.title || "")));
 }
 
-function plural(n, word) {
+function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-async function windowTabs(windowId) {
+async function windowTabs(windowId: number): Promise<chrome.tabs.Tab[]> {
   const tabs = await chrome.tabs.query({ windowId });
   return tabs.sort((a, b) => a.index - b.index);
 }
 
-async function resolveTab(sender) {
+async function resolveTab(
+  sender: chrome.runtime.MessageSender | null
+): Promise<chrome.tabs.Tab | undefined> {
   if (sender && sender.tab) return sender.tab;
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   return tab;
 }
 
-async function handleMessage(msg, sender) {
+async function handleMessage(
+  msg: TabzMessage,
+  sender: chrome.runtime.MessageSender | null
+): Promise<TabzResponse> {
   const tab = await resolveTab(sender);
   if (!tab) return { ok: false, notice: "No active tab" };
   const tabs = await windowTabs(tab.windowId);
 
   switch (msg.type) {
     case "move":
-      await chrome.tabs.move(tab.id, { index: clampMoveIndex(tabs, tab, msg.delta) });
+      await chrome.tabs.move(tab.id!, { index: clampMoveIndex(tabs, tab, msg.delta) });
       return { ok: true };
 
     case "moveEdge": {
       const { min, max } = moveBounds(tabs, tab);
-      await chrome.tabs.move(tab.id, { index: msg.edge === "start" ? min : max });
+      await chrome.tabs.move(tab.id!, { index: msg.edge === "start" ? min : max });
       return { ok: true };
     }
 
     case "createGroup": {
-      const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
+      const groupId = await chrome.tabs.group({ tabIds: [tab.id!] });
       const title = groupTitleFor(tab.url);
       await chrome.tabGroups.update(groupId, { title, color: groupColorFor(title) });
       return { ok: true, notice: `Grouped: ${title}` };
@@ -97,20 +106,21 @@ async function handleMessage(msg, sender) {
     case "joinGroup": {
       const groupId = findNearestGroupId(tabs, tab.index);
       if (groupId === NO_GROUP) return { ok: false, notice: "No group nearby" };
-      await chrome.tabs.group({ tabIds: [tab.id], groupId });
+      await chrome.tabs.group({ tabIds: [tab.id!], groupId });
       const group = await chrome.tabGroups.get(groupId);
       return { ok: true, notice: `Joined: ${group.title || "group"}` };
     }
 
     case "ungroup":
       if (tab.groupId === NO_GROUP) return { ok: false, notice: "Not in a group" };
-      await chrome.tabs.ungroup(tab.id);
+      await chrome.tabs.ungroup(tab.id!);
       return { ok: true };
 
     case "dissolveGroup": {
       if (tab.groupId === NO_GROUP) return { ok: false, notice: "Not in a group" };
+      // members is never empty: the current tab is one of them.
       const members = tabs.filter((t) => t.groupId === tab.groupId);
-      await chrome.tabs.ungroup(members.map((t) => t.id));
+      await chrome.tabs.ungroup(members.map((t) => t.id!) as [number, ...number[]]);
       return { ok: true, notice: `Ungrouped ${plural(members.length, "tab")}` };
     }
 
@@ -122,23 +132,23 @@ async function handleMessage(msg, sender) {
       }
 
     case "closeMatches": {
-      let matches;
+      let matches: chrome.tabs.Tab[];
       try {
         matches = filterByPattern(tabs, msg.pattern);
       } catch {
         return { ok: false, notice: "Invalid regex" };
       }
       if (matches.length === 0) return { ok: true, count: 0, notice: "No matches" };
-      await chrome.tabs.remove(matches.map((t) => t.id));
+      await chrome.tabs.remove(matches.map((t) => t.id!));
       return { ok: true, count: matches.length, notice: `Closed ${plural(matches.length, "tab")}` };
     }
 
     default:
-      return { ok: false, notice: `Unknown message: ${msg.type}` };
+      return { ok: false, notice: `Unknown message: ${(msg as { type: string }).type}` };
   }
 }
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg: TabzMessage, sender, sendResponse) => {
   handleMessage(msg, sender)
     .then(sendResponse)
     .catch((err) => sendResponse({ ok: false, notice: `Tabz: ${err.message || err}` }));

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    // ES2021 is fully supported by Chrome 89, the manifest's
+    // minimum_chrome_version; bump both together.
+    "target": "ES2021",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["chrome", "node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src", "tests"]
+}

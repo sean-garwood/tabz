@@ -1,9 +1,24 @@
 import { expect, test } from "vitest";
-import { createChromeMock, loadScript, windowOrder, tabById } from "./chrome-mock.js";
+import {
+  createChromeMock,
+  loadScript,
+  windowOrder,
+  tabById,
+  type MockGroup,
+  type MockTab,
+  type MockTabInit,
+} from "./chrome-mock";
 
-function setup(tabs, groups) {
+interface BackgroundExports {
+  handleMessage: (msg: TabzMessage, sender: { tab?: MockTab } | null) => Promise<TabzResponse>;
+  groupTitleFor: (url: string | undefined) => string;
+  groupColorFor: (title: string) => string;
+  GROUP_COLORS: string[];
+}
+
+function setup(tabs: MockTabInit[], groups?: Record<number, MockGroup>) {
   const { chrome, state } = createChromeMock({ tabs, groups });
-  const exports = loadScript("background.js", { chrome }, [
+  const exports = loadScript<BackgroundExports>("dist/background.js", { chrome }, [
     "handleMessage",
     "groupTitleFor",
     "groupColorFor",
@@ -13,7 +28,7 @@ function setup(tabs, groups) {
     state,
     exports,
     handle: exports.handleMessage,
-    sender: (id) => ({ tab: tabById(state, id) }),
+    sender: (id: number) => ({ tab: tabById(state, id) }),
   };
 }
 
@@ -80,7 +95,7 @@ test("createGroup auto-names from the hostname and picks a palette color", async
   const res = await handle({ type: "createGroup" }, sender(1));
   expect(res.ok).toBe(true);
   expect(res.notice).toBe("Grouped: github.com");
-  expect(tabById(state, 1).groupId).toBe(100);
+  expect(tabById(state, 1)!.groupId).toBe(100);
   expect(state.groups[100].title).toBe("github.com");
   expect(exports.GROUP_COLORS).toContain(state.groups[100].color);
 });
@@ -104,7 +119,7 @@ test("joinGroup prefers the left group on a distance tie", async () => {
   );
   const res = await handle({ type: "joinGroup" }, sender(2));
   expect(res.notice).toBe("Joined: left");
-  expect(tabById(state, 2).groupId).toBe(5);
+  expect(tabById(state, 2)!.groupId).toBe(5);
 });
 
 test("joinGroup falls back to the nearest group on the right", async () => {
@@ -114,7 +129,7 @@ test("joinGroup falls back to the nearest group on the right", async () => {
   );
   const res = await handle({ type: "joinGroup" }, sender(2));
   expect(res.notice).toBe("Joined: right");
-  expect(tabById(state, 2).groupId).toBe(7);
+  expect(tabById(state, 2)!.groupId).toBe(7);
 });
 
 test("joinGroup reports when no group exists", async () => {
@@ -130,8 +145,8 @@ test("ungroup removes only the current tab", async () => {
   ]);
   const res = await handle({ type: "ungroup" }, sender(1));
   expect(res.ok).toBe(true);
-  expect(tabById(state, 1).groupId).toBe(-1);
-  expect(tabById(state, 2).groupId).toBe(5);
+  expect(tabById(state, 1)!.groupId).toBe(-1);
+  expect(tabById(state, 2)!.groupId).toBe(5);
 });
 
 test("ungroup reports when the tab is not grouped", async () => {
@@ -148,12 +163,12 @@ test("dissolveGroup ungroups every member and nothing else", async () => {
   ]);
   const res = await handle({ type: "dissolveGroup" }, sender(1));
   expect(res.notice).toBe("Ungrouped 2 tabs");
-  expect(tabById(state, 1).groupId).toBe(-1);
-  expect(tabById(state, 2).groupId).toBe(-1);
-  expect(tabById(state, 3).groupId).toBe(9);
+  expect(tabById(state, 1)!.groupId).toBe(-1);
+  expect(tabById(state, 2)!.groupId).toBe(-1);
+  expect(tabById(state, 3)!.groupId).toBe(9);
 });
 
-const REGEX_FIXTURE = [
+const REGEX_FIXTURE: MockTabInit[] = [
   { id: 1, url: "https://news.ycombinator.com", title: "HN" },
   { id: 2, url: "https://example.com", title: "Docs about NEWS" },
   { id: 3, url: "https://news.example.com", title: "pinned news", pinned: true },
@@ -191,7 +206,7 @@ test("closeMatches with no matches removes nothing", async () => {
 test("onMessage listener responds asynchronously and returns true", async () => {
   const { state } = setup([{ id: 1 }]);
   const res = await new Promise((resolve) => {
-    const returned = state.listeners.message(
+    const returned = state.listeners.message!(
       { type: "ungroup" },
       { tab: tabById(state, 1) },
       resolve
@@ -203,6 +218,6 @@ test("onMessage listener responds asynchronously and returns true", async () => 
 
 test("keyboard command acts on the active tab", async () => {
   const { state } = setup([{ id: 1, active: true }, { id: 2 }, { id: 3 }]);
-  await state.listeners.command("move-right");
+  await state.listeners.command!("move-right");
   expect(windowOrder(state, 1)).toEqual([2, 1, 3]);
 });

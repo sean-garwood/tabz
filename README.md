@@ -6,19 +6,22 @@ regex, all from the keyboard. Built to sit alongside
 
 - **Minimal permissions**: `tabs` and `tabGroups` only. No host permissions,
   no `activeTab`, no storage.
-- **Zero dependencies**: three plain files, no build step, no packages.
+- **Zero runtime dependencies**: TypeScript compiles to two plain scripts;
+  nothing from npm ships in the extension.
 - **Nothing persisted, nothing sent**: no storage APIs, no network requests,
   no analytics. Regex patterns you type live in memory for the duration of one
   message and are then gone.
 
 ## Install
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked** and select this repo's root directory
+1. Run `npm install && npm run build` (compiles `src/*.ts` to `dist/`)
+2. Open `chrome://extensions`
+3. Enable **Developer mode**
+4. Click **Load unpacked** and select this repo's root directory
 
-After editing `background.js` or `manifest.json`, click the refresh icon on
-the extension card. Content script changes take effect on the next page load.
+After editing `src/background.ts` or `manifest.json`, run `npm run build` and
+click the refresh icon on the extension card. Changes to `src/content.ts`
+take effect on the next page load after a rebuild.
 
 ## Keys
 
@@ -125,20 +128,24 @@ IME composition, and stands down for any key carrying `Ctrl`, `Alt`, or
 
 ```
 tabz/
-  manifest.json    MV3 manifest: permissions, content script, commands
-  background.js    service worker; owns all chrome.tabs/tabGroups calls
-  content.js       key sequence parser + HUD overlay; messages the worker
-  tests/           node:test unit tests, chrome API mock, no dependencies
+  manifest.json        MV3 manifest: permissions, content script, commands
+  src/background.ts    service worker; owns all chrome.tabs/tabGroups calls
+  src/content.ts       key sequence parser + HUD overlay; messages the worker
+  src/types.d.ts       message protocol shared by both scripts (ambient types)
+  dist/                compiled output (gitignored); what the manifest loads
+  tests/               Vitest unit tests and the chrome API mock
 ```
-
-Run the tests with Node 18+ (no packages to install):
 
 ```sh
-node --test
+npm install
+npm run build      # compile src/*.ts to dist/
+npm run typecheck  # type-check sources and tests without emitting
+npm test           # build, then run the tests against the compiled output
 ```
 
-The extension scripts are plain browser scripts; tests load them into a
-`node:vm` context with a mocked `chrome` API.
+The compiled extension files are plain browser scripts (no module wrapper —
+MV3 content scripts cannot be ES modules); tests evaluate the `dist/` output
+in-realm with a mocked `chrome` API.
 
 ## License
 
