@@ -3,15 +3,19 @@
   "name": "Tabz",
   "version": "0.1.0",
   "minimum_chrome_version": "89",
-  "description": "Vim-style tab management that coexists with Vimium: move, group, and regex-close tabs. No data collected, nothing stored.",
-  "permissions": ["tabs", "tabGroups"],
+  "description": "Vim-style tab management that coexists with Vimium: move, group, and regex-close tabs. Configurable keys; no data collected.",
+  "permissions": ["tabs", "tabGroups", "storage"],
   "background": {
     "service_worker": "dist/background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
   },
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*", "file://*/*"],
-      "js": ["dist/content.js"],
+      "js": ["dist/messaging.js", "dist/content.js"],
       "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Tabz settings</title>
+        <link rel="stylesheet" href="options.css" />
+    </head>
+
+    <body>
+        <main>
+            <h1>Tabz key bindings</h1>
+            <p class="hint">
+                Sequences are leader + key, vim-style. Allowed keys: a-z, A-Z,
+                0, comma, period, semicolon. Digits 1-9 are reserved for count
+                prefixes, and the leader may not be 0. Bindings are not checked
+                against other extensions (Vimium included); avoiding conflicts
+                is up to you.
+            </p>
+            <form id="config-form">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>Key</th>
+                            <th>Sequence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Leader</td>
+                            <td>
+                                <input
+                                    id="leader"
+                                    maxlength="1"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                />
+                            </td>
+                            <td class="seq"></td>
+                        </tr>
+                    </tbody>
+                    <tbody id="bindings"></tbody>
+                </table>
+                <p id="status" role="status"></p>
+                <div class="buttons">
+                    <button type="submit" id="save">Save</button>
+                    <button type="button" id="reset">Reset to defaults</button>
+                </div>
+            </form>
+        </main>
+        <script src="dist/messaging.js"></script>
+        <script src="dist/options.js"></script>
+    </body>
+</html>

@@ -1,6 +1,8 @@
 import { expect, test } from "vitest";
 import {
     createChromeMock,
+    defaultConfig,
+    fetchMock,
     loadScript,
     windowOrder,
     tabById,
@@ -10,20 +12,24 @@ import {
 } from "./chrome-mock";
 
 interface BackgroundExports {
-    handleMessage: (
-        msg: TabzMessage,
+    handleMessage: <K extends TabzMessageType>(
+        msg: { type: K } & TabzMessageMap[K],
         sender?: { tab?: MockTab },
-    ) => Promise<TabzResponse>;
+    ) => Promise<TabzResponseFor<K>>;
     groupTitleFor: (url: string) => string;
     groupColorFor: (title: string) => string;
     GROUP_COLORS: readonly string[];
 }
 
-function setup(tabs: MockTabInit[], groups?: Record<number, MockGroup>) {
-    const { chrome, state } = createChromeMock({ tabs, groups });
+function setup(
+    tabs: MockTabInit[],
+    groups?: Record<number, MockGroup>,
+    stored?: Record<string, unknown>,
+) {
+    const { chrome, state } = createChromeMock({ tabs, groups, stored });
     const exports = loadScript<BackgroundExports>(
         "dist/background.js",
-        { chrome },
+        { chrome, fetch: fetchMock },
         ["handleMessage", "groupTitleFor", "groupColorFor", "GROUP_COLORS"],
     );
     return {
@@ -247,4 +253,143 @@ test("keyboard command acts on the active tab", async () => {
     const { state } = setup([{ id: 1, active: true }, { id: 2 }, { id: 3 }]);
     await state.listeners.command!("move-right");
     expect(windowOrder(state, 1)).toEqual([2, 1, 3]);
+});
+
+function payloadOf(res: TabzResponseFor<"getConfig">): TabzConfigPayload {
+    if (!res.ok) throw new Error("Expected a config payload");
+    return res.config;
+}
+
+test("getConfig returns the config.json defaults when storage is empty", async () => {
+    const { handle } = setup([]);
+    const payload = payloadOf(await handle({ type: "getConfig" }));
+    expect(payload.defaults).toEqual(defaultConfig());
+    expect(payload.current).toEqual(payload.defaults);
+    expect(payload.warnings).toEqual([]);
+});
+
+test("getConfig overlays a partial stored config onto the defaults", async () => {
+    const { handle } = setup([], undefined, {
+        config: { keys: { moveLeft: "h" } },
+    });
+    const { current } = payloadOf(await handle({ type: "getConfig" }));
+    expect(current.leader).toBe("s");
+    expect(current.keys.moveLeft).toBe("h");
+    expect(current.keys.moveRight).toBe("e");
+});
+
+test("getConfig falls back to defaults when bindings collide, with a warning", async () => {
+    const stored = defaultConfig();
+    stored.keys.moveLeft = "e";
+    const { handle } = setup([], undefined, { config: stored });
+    const { current, warnings } = payloadOf(
+        await handle({ type: "getConfig" }),
+    );
+    expect(current).toEqual(defaultConfig());
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/bound to "e"/);
+});
+
+test("getConfig keeps valid overrides and warns about invalid ones", async () => {
+    const { handle } = setup([], undefined, {
+        config: {
+            leader: "<script>alert(1)</script>",
+            keys: {
+                moveLeft: "h",
+                moveRight: "<img src=x onerror=alert(1)>",
+            },
+        },
+    });
+    const { current, warnings } = payloadOf(
+        await handle({ type: "getConfig" }),
+    );
+    expect(current.leader).toBe("s");
+    expect(current.keys.moveLeft).toBe("h");
+    expect(current.keys.moveRight).toBe("e");
+    expect(warnings).toHaveLength(2);
+});
+
+test("getConfig warns and uses defaults when the stored config is not an object", async () => {
+    const { handle } = setup([], undefined, { config: "<script>" });
+    const payload = payloadOf(await handle({ type: "getConfig" }));
+    expect(payload.current).toEqual(defaultConfig());
+    expect(payload.warnings).toHaveLength(1);
+});
+
+test("getConfig warns about unknown actions without dropping valid ones", async () => {
+    const { handle } = setup([], undefined, {
+        config: { keys: { moveLeft: "h", evalArbitraryCode: "z" } },
+    });
+    const { current, warnings } = payloadOf(
+        await handle({ type: "getConfig" }),
+    );
+    expect(current.keys.moveLeft).toBe("h");
+    expect(warnings).toEqual(['Unknown action "evalArbitraryCode"']);
+});
+
+test("setConfig persists a valid config and getConfig reflects it", async () => {
+    const { state, handle } = setup([]);
+    const config = defaultConfig();
+    config.leader = ",";
+    config.keys.regexClose = ";";
+    const res = await handle({ type: "setConfig", config });
+    expect(res).toEqual({ ok: true, notice: "Saved" });
+    expect(state.stored["config"]).toEqual(config);
+    const { current } = payloadOf(await handle({ type: "getConfig" }));
+    expect(current).toEqual(config);
+});
+
+test("setConfig rejects a key outside the allowed set", async () => {
+    const { state, handle } = setup([]);
+    for (const bad of ["1", "ww", "", "!"]) {
+        const config = defaultConfig();
+        config.keys.moveLeft = bad;
+        const res = await handle({ type: "setConfig", config });
+        expect(res.ok).toBe(false);
+    }
+    expect(state.stored).toEqual({});
+});
+
+test("setConfig rejects duplicate bindings", async () => {
+    const { handle } = setup([]);
+    const config = defaultConfig();
+    config.keys.moveLeft = "e";
+    const res = await handle({ type: "setConfig", config });
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.notice).toMatch(/moveLeft and moveRight/);
+});
+
+test("setConfig allows a binding equal to the leader, vim ss-style", async () => {
+    const { handle } = setup([]);
+    const res = await handle({ type: "setConfig", config: defaultConfig() });
+    expect(res.ok).toBe(true);
+});
+
+test("setConfig rejects a digit leader", async () => {
+    const { handle } = setup([]);
+    const config = defaultConfig();
+    config.leader = "0";
+    const res = await handle({ type: "setConfig", config });
+    expect(res.ok).toBe(false);
+});
+
+test("setConfig rejects an unknown action", async () => {
+    const { handle } = setup([]);
+    const config = defaultConfig() as TabzConfig & {
+        keys: Record<string, string>;
+    };
+    config.keys["closeAll"] = "z";
+    const res = await handle({ type: "setConfig", config });
+    expect(res).toEqual({ ok: false, notice: 'Unknown action "closeAll"' });
+});
+
+test("validateConfig reports errors without persisting anything", async () => {
+    const { state, handle } = setup([]);
+    const config = defaultConfig();
+    config.keys.ungroup = "3";
+    expect((await handle({ type: "validateConfig", config })).ok).toBe(false);
+    expect(
+        (await handle({ type: "validateConfig", config: defaultConfig() })).ok,
+    ).toBe(true);
+    expect(state.stored).toEqual({});
 });

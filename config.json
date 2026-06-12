@@ -1,0 +1,14 @@
+{
+  "leader": "s",
+  "keys": {
+    "moveLeft": "w",
+    "moveRight": "e",
+    "moveStart": "0",
+    "moveEnd": "$",
+    "createGroup": "c",
+    "joinGroup": "a",
+    "ungroup": "q",
+    "dissolveGroup": "Q",
+    "regexClose": "s"
+  }
+}

@@ -1,29 +1,32 @@
 # Tabz
 
 Vim-style tab management for Chrome: move tabs, group tabs, and close tabs by
-regex, all from the keyboard. Built to sit alongside
-[Vimium](https://github.com/philc/vimium) without stealing any of its keys.
+regex, all from the keyboard. The default keys sit alongside
+[Vimium](https://github.com/philc/vimium) without stealing any of its keys,
+and every binding is configurable.
 
-- **Minimal permissions**: `tabs` and `tabGroups` only. No host permissions,
-  no `activeTab`, no storage.
-- **Zero dependencies**: three plain files, no build step, no packages.
-- **Nothing persisted, nothing sent**: no storage APIs, no network requests,
-  no analytics. Regex patterns you type live in memory for the duration of one
-  message and are then gone.
+- **Minimal permissions**: `tabs`, `tabGroups`, and `storage` (used only to
+  persist your key bindings). No host permissions, no `activeTab`.
+- **Zero runtime dependencies**: nothing from npm ships in the extension.
+- **Nothing sent**: no network requests, no analytics. The only thing ever
+  stored is your key config in `chrome.storage.sync`; regex patterns you type
+  live in memory for the duration of one message and are then gone.
 
 ## Install
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked** and select this repo's root directory
+1. `npm install && npm run build` (compiles `src/` to `dist/`)
+2. Open `chrome://extensions`
+3. Enable **Developer mode**
+4. Click **Load unpacked** and select this repo's root directory
 
-After editing `background.js` or `manifest.json`, click the refresh icon on
-the extension card. Content script changes take effect on the next page load.
+After rebuilding or editing `manifest.json`, click the refresh icon on the
+extension card. Content script changes take effect on the next page load.
 
 ## Keys
 
-All sequences start with the `s` leader. Press the keys in order (like vim),
-not as a chord.
+All sequences start with a leader (`s` by default) followed by one key.
+Press the keys in order (like vim), not as a chord. The tables below show the
+defaults; see [Configuring keys](#configuring-keys) to change any of them.
 
 ### Move
 
@@ -68,6 +71,26 @@ count updates live so you can see the blast radius before committing.
 
 `Esc` also cancels a pending key sequence.
 
+## Configuring keys
+
+Open the extension's options page: right-click the Tabz icon and pick
+**Options**, or go to `chrome://extensions`, open Tabz details, and click
+**Extension options** (the page lives at
+`chrome-extension://<extension-id>/options.html`).
+
+- The leader and every action key can be rebound. Allowed keys: `a-z`, `A-Z`,
+  `0`, `$`, comma, period, semicolon. Digits 1-9 are reserved for count
+  prefixes, and the leader may not be `0` (it would break counts).
+- Every edit is validated live, and again before saving; duplicate bindings
+  and disallowed keys are rejected. A binding may equal the leader (that is
+  how the default `ss` regex prompt works).
+- Defaults ship in [`config.json`](config.json); your changes are stored in
+  `chrome.storage.sync` and follow your Chrome profile. **Reset to defaults**
+  puts everything back.
+- Saved changes apply to already-open tabs immediately.
+- Bindings are **not** checked against other extensions. If you rebind onto a
+  key Vimium uses, resolving that conflict is up to you (see below).
+
 ## Global shortcuts (work on chrome:// pages too)
 
 Content scripts cannot run on `chrome://` pages, the Web Store, or other
@@ -89,11 +112,13 @@ Both extensions listen for keys on every page, and Chrome does not define
 which extension's listener runs first. If Tabz used any key Vimium binds,
 whichever extension won that race would swallow the key, even mid-sequence.
 
-So every key in the Tabz grammar (`s`, `w`, `e`, `c`, `a`, `q`, `Q`, `0`,
-`$`, and count digits) is chosen to be absent from Vimium's default bindings,
-as a starter *and* as a continuation. Vimium passes them through untouched no
-matter who registered first, and Tabz never suppresses a key Vimium would
-have handled.
+So every key in the default Tabz grammar (`s`, `w`, `e`, `c`, `a`, `q`, `Q`,
+`0`, `$`, and count digits) is chosen to be absent from Vimium's default
+bindings, as a starter *and* as a continuation. Vimium passes them through
+untouched no matter who registered first, and Tabz never suppresses a key
+Vimium would have handled. This guarantee only holds for the defaults: if you
+rebind Tabz onto a key Vimium uses (or vice versa), whichever extension wins
+the registration race swallows it.
 
 Tabz also ignores keystrokes in text inputs, editable elements, and during
 IME composition, and stands down for any key carrying `Ctrl`, `Alt`, or
@@ -102,17 +127,18 @@ IME composition, and stands down for any key carrying `Ctrl`, `Alt`, or
 ## Privacy
 
 - Permissions are `tabs` (read tab URL/title to move, match, and name
-  groups) and `tabGroups` (create and edit groups). That is the entire list.
+  groups), `tabGroups` (create and edit groups), and `storage` (persist your
+  key bindings). That is the entire list.
 - The content script is a key listener; the only DOM it ever touches is its
   own HUD overlay, isolated in a shadow root.
-- No `chrome.storage`, no `localStorage`, no cookies, no `fetch`, no
-  external services, no telemetry. There is nothing to opt out of.
+- The only stored data is the key config in `chrome.storage.sync`. No
+  `localStorage`, no cookies, no external services, no telemetry.
 
 ## Known limitations
 
 - On pages that bind bare letters (for example a site shortcut on `s`), Tabz
-  intercepts the leader key outside of text fields. Key customization may
-  come later.
+  intercepts the leader key outside of text fields. Rebind the leader on the
+  options page if it clashes with a site you use.
 - If Vimium is in a mode entered without focusing an input (its `i` insert
   mode or visual mode), the two extensions can race for the leader key.
   Normal-mode coexistence is conflict-free.
@@ -125,20 +151,22 @@ IME composition, and stands down for any key carrying `Ctrl`, `Alt`, or
 
 ```
 tabz/
-  manifest.json    MV3 manifest: permissions, content script, commands
-  background.js    service worker; owns all chrome.tabs/tabGroups calls
-  content.js       key sequence parser + HUD overlay; messages the worker
-  tests/           node:test unit tests, chrome API mock, no dependencies
+  manifest.json      MV3 manifest: permissions, content script, options, commands
+  config.json        default key bindings (leader + one key per action)
+  options.html       key-binding editor page
+  src/background.ts  service worker; chrome.tabs/tabGroups calls, config owner
+  src/content.ts     key sequence parser + HUD overlay; messages the worker
+  src/options.ts     options page logic; validates via the service worker
+  tests/             vitest unit tests + chrome API mock
 ```
-
-Run the tests with Node 18+ (no packages to install):
 
 ```sh
-node --test
+npm install
+npm test        # builds src/ to dist/, then runs vitest
 ```
 
-The extension scripts are plain browser scripts; tests load them into a
-`node:vm` context with a mocked `chrome` API.
+The compiled extension scripts are plain browser scripts; tests evaluate them
+in-realm with a mocked `chrome` API shadowing the global.
 
 ## License
 
