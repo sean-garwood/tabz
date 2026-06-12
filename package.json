@@ -1,0 +1,14 @@
+{
+  "name": "tabz",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fmt": "prettier --write '**/*.{js,json,ts}'",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.4",
+    "vitest": "^3.2.4"
+  }
+}

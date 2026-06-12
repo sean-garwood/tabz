@@ -33,6 +33,7 @@ The content script does **no DOM mutation** beyond the regex overlay. All tab/gr
 - Distinct keys instead of overriding Vimium's `<<`/`>>` (override would require winning the listener race; see Key constraints)
 - Group "delete" is non-destructive: `sQ` dissolves the group (ungroups members), closes nothing
 - No persistence of any kind: no chrome.storage, no localStorage, no network; service worker is stateless
+- Zero **runtime** dependencies is a hard rule (nothing from npm ships in the extension); devDependencies are fine when tried-and-true and few — currently only Vitest
 
 ## Keybindings (final)
 
@@ -49,7 +50,7 @@ Leader is `s`. Counts go before or after the leader (`3sw` or `s3w`), move comma
 
 ## Testing
 
-`node --test` (Node 18+, zero dependencies). Tests load the plain browser scripts into a `node:vm` context with the mocked `chrome` API in `tests/chrome-mock.js`. Notes: the VM realm needs `URL` passed in, and tests use non-strict `assert` because `deepStrictEqual` compares prototypes across realms. Testable logic in `background.js`/`content.js` must be top-level function declarations (they become properties of the VM context; `const`/`let` do not).
+`npm test` (Vitest; run `npm install` first). Vitest is the only devDependency — the extension itself stays dependency-free, and nothing from npm ships to users. Tests evaluate the plain browser scripts in-realm via `loadScript` in `tests/chrome-mock.js`: the script source is wrapped in `new Function`, with sandbox entries (e.g. the mocked `chrome`) shadowing globals as parameters, and the requested top-level bindings returned by name. This imposes nothing on the source files — `function`, `const`, and `let` bindings all work — and avoids cross-realm prototype issues entirely.
 
 ## Loading the extension locally
 
