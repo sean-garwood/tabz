@@ -154,7 +154,9 @@ async function handleMessage(
             if (tab.groupId === NO_GROUP)
                 return { ok: false, notice: "Not in a group" };
             const members = tabs.filter((t) => t.groupId === tab.groupId);
-            await chrome.tabs.ungroup(members.map((t) => t.id!) as [number, ...number[]]);
+            await chrome.tabs.ungroup(
+                members.map((t) => t.id!) as [number, ...number[]],
+            );
             return {
                 ok: true,
                 notice: `Ungrouped ${plural(members.length, "tab")}`,

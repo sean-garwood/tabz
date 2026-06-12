@@ -16,11 +16,11 @@ interface ContentExports {
 
 // No chrome in the sandbox, so the script's install() guard keeps it from
 // wiring up any DOM listeners.
-const { createSequenceParser, isEditableTarget } =
-    loadScript<ContentExports>("dist/content.js", {}, [
-        "createSequenceParser",
-        "isEditableTarget",
-    ]);
+const { createSequenceParser, isEditableTarget } = loadScript<ContentExports>(
+    "dist/content.js",
+    {},
+    ["createSequenceParser", "isEditableTarget"],
+);
 
 function makeParser() {
     let t = 1000;

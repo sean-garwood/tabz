@@ -74,8 +74,7 @@ export function createChromeMock({
     for (const t of tabs) {
         const tab = { ...TAB_DEFAULTS, index: 0, id: t.id ?? autoId, ...t };
         autoId = Math.max(autoId, tab.id) + 1;
-        perWindowCount[tab.windowId] =
-            (perWindowCount[tab.windowId] ?? -1) + 1;
+        perWindowCount[tab.windowId] = (perWindowCount[tab.windowId] ?? -1) + 1;
         tab.index = perWindowCount[tab.windowId];
         state.tabs.push(tab);
     }

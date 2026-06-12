@@ -4,21 +4,21 @@
 // must have no module wrapper.
 
 type TabzMessage =
-  | { type: "move"; delta: number }
-  | { type: "moveEdge"; edge: "start" | "end" }
-  | { type: "createGroup" }
-  | { type: "joinGroup" }
-  | { type: "ungroup" }
-  | { type: "dissolveGroup" }
-  | { type: "countMatches"; pattern: string }
-  | { type: "closeMatches"; pattern: string };
+    | { type: "move"; delta: number }
+    | { type: "moveEdge"; edge: "start" | "end" }
+    | { type: "createGroup" }
+    | { type: "joinGroup" }
+    | { type: "ungroup" }
+    | { type: "dissolveGroup" }
+    | { type: "countMatches"; pattern: string }
+    | { type: "closeMatches"; pattern: string };
 
 // "prompt" is content-script-internal: it opens the regex HUD and is never
 // sent to the service worker.
 type TabzCommand = TabzMessage | { type: "prompt" };
 
 interface TabzResponse {
-  ok: boolean;
-  notice?: string;
-  count?: number;
+    ok: boolean;
+    notice?: string;
+    count?: number;
 }

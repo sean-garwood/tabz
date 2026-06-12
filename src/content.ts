@@ -74,8 +74,14 @@ function createSequenceParser(now = Date.now) {
     return { feed, reset };
 }
 
-function isEditableTarget(event: Event | { composedPath?: () => EventTarget[]; target: EventTarget | null }): boolean {
-    const el = (event.composedPath && event.composedPath()[0]) || (event as Event).target;
+function isEditableTarget(
+    event:
+        | Event
+        | { composedPath?: () => EventTarget[]; target: EventTarget | null },
+): boolean {
+    const el =
+        (event.composedPath && event.composedPath()[0]) ||
+        (event as Event).target;
     if (!el || (el as Node).nodeType !== 1) return false;
     const elem = el as HTMLElement;
     return (
