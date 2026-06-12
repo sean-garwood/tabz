@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": ["Bash(node --test *)"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --test",
+            "statusMessage": "Running tests...",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
