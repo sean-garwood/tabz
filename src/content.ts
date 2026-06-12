@@ -1,28 +1,33 @@
-const LEADER = "s";
 const SEQUENCE_TIMEOUT_MS = 2000;
 const COUNT_LIMIT = 99;
 const TOAST_MS = 1600;
 const PREVIEW_DEBOUNCE_MS = 80;
 
-const SEQUENCE_COMMANDS = {
-    w: (count: number): TabzCommand => ({ type: "move", delta: -count }),
-    e: (count: number): TabzCommand => ({ type: "move", delta: count }),
-    0: (): TabzCommand => ({ type: "moveEdge", edge: "start" }),
-    $: (): TabzCommand => ({ type: "moveEdge", edge: "end" }),
-    c: (): TabzCommand => ({ type: "createGroup" }),
-    a: (): TabzCommand => ({ type: "joinGroup" }),
-    q: (): TabzCommand => ({ type: "ungroup" }),
-    Q: (): TabzCommand => ({ type: "dissolveGroup" }),
-    s: (): TabzCommand => ({ type: "prompt" }),
+type CommandFactory = (count: number) => TabzCommand;
+
+const ACTION_COMMANDS: Record<TabzAction, CommandFactory> = {
+    moveLeft: (count) => ({ type: "move", delta: -count }),
+    moveRight: (count) => ({ type: "move", delta: count }),
+    moveStart: () => ({ type: "moveEdge", edge: "start" }),
+    moveEnd: () => ({ type: "moveEdge", edge: "end" }),
+    createGroup: () => ({ type: "createGroup" }),
+    joinGroup: () => ({ type: "joinGroup" }),
+    ungroup: () => ({ type: "ungroup" }),
+    dissolveGroup: () => ({ type: "dissolveGroup" }),
+    regexClose: () => ({ type: "prompt" }),
 };
 
-type SequenceKey = `${keyof typeof SEQUENCE_COMMANDS}`;
-
-function isSequenceKey(key: string): key is SequenceKey {
-    return key in SEQUENCE_COMMANDS;
+function buildSequenceMap(config: TabzConfig): Map<string, CommandFactory> {
+    const map = new Map<string, CommandFactory>();
+    for (const action of Object.keys(ACTION_COMMANDS) as TabzAction[]) {
+        const key = config.keys[action];
+        if (key) map.set(key, ACTION_COMMANDS[action]);
+    }
+    return map;
 }
 
-function createSequenceParser(now = Date.now) {
+function createSequenceParser(config: TabzConfig, now = Date.now) {
+    const commands = buildSequenceMap(config);
     let countBuf = "";
     let pending = false;
     let lastAt = 0;
@@ -43,7 +48,7 @@ function createSequenceParser(now = Date.now) {
         const isCountDigit = isDigit && !(key === "0" && countBuf === "");
 
         if (!pending) {
-            if (key === LEADER) {
+            if (key === config.leader) {
                 pending = true;
                 return { handled: true };
             }
@@ -60,13 +65,14 @@ function createSequenceParser(now = Date.now) {
             return { handled: true };
         }
 
-        if (!isSequenceKey(key)) {
+        const toCommand = commands.get(key);
+        if (!toCommand) {
             reset();
             return { handled: false };
         }
         const count = Math.min(COUNT_LIMIT, parseInt(countBuf || "1", 10));
         reset();
-        return { handled: true, command: SEQUENCE_COMMANDS[key](count) };
+        return { handled: true, command: toCommand(count) };
     }
 
     return { feed, reset };
@@ -224,12 +230,25 @@ function install() {
             notice: `Tabz: ${err.message || err}`,
         }));
     const hud = createHud(send);
-    const parser = createSequenceParser();
+    let parser: ReturnType<typeof createSequenceParser> | undefined;
+
+    // Keys pass through untouched until the config arrives; the parser is
+    // rebuilt whenever the user saves new bindings on the options page.
+    async function loadConfig() {
+        const res = await send({ type: "getConfig" });
+        if (res.ok && res.config)
+            parser = createSequenceParser(res.config.current);
+    }
+    loadConfig();
+    chrome.storage.onChanged.addListener((_changes, area) => {
+        if (area === "sync") loadConfig();
+    });
 
     window.addEventListener(
         "keydown",
         (event) => {
             if (hud.promptOpen()) return hud.handlePromptKey(event);
+            if (!parser) return;
             if (event.defaultPrevented || event.isComposing) return;
             if (event.ctrlKey || event.altKey || event.metaKey) return;
             if (event.key.length !== 1 && event.key !== "Escape") return;

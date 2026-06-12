@@ -1,5 +1,66 @@
 const NO_GROUP = -1;
 
+// Bindable keys: letters, 0, $, and ,.; (digits 1-9 are reserved for count
+// prefixes). The leader additionally may not be 0, which must keep its
+// count-extending role.
+const KEY_PATTERN = /^[a-zA-Z0$,.;]$/;
+const LEADER_PATTERN = /^[a-zA-Z$,.;]$/;
+
+let defaultsPromise: Promise<TabzConfig> | undefined;
+
+function configDefaults(): Promise<TabzConfig> {
+    defaultsPromise ??= fetch(chrome.runtime.getURL("config.json")).then(
+        (res) => res.json() as Promise<TabzConfig>,
+    );
+    return defaultsPromise;
+}
+
+// Overlays whatever valid-looking pieces storage holds onto the shipped
+// defaults; unknown actions and non-string values are dropped.
+function mergeConfig(defaults: TabzConfig, stored: unknown): TabzConfig {
+    const merged: TabzConfig = {
+        leader: defaults.leader,
+        keys: { ...defaults.keys },
+    };
+    if (typeof stored !== "object" || stored === null) return merged;
+    const { leader, keys } = stored as Partial<TabzConfig>;
+    if (typeof leader === "string") merged.leader = leader;
+    if (typeof keys === "object" && keys !== null)
+        for (const action of Object.keys(defaults.keys) as TabzAction[])
+            if (typeof keys[action] === "string")
+                merged.keys[action] = keys[action];
+    return merged;
+}
+
+function validateConfig(config: unknown, defaults: TabzConfig): string | null {
+    if (typeof config !== "object" || config === null)
+        return "Config must be an object";
+    const { leader, keys } = config as Partial<TabzConfig>;
+    if (typeof leader !== "string" || !LEADER_PATTERN.test(leader))
+        return "Leader must be a single letter or one of $ , . ;";
+    if (typeof keys !== "object" || keys === null)
+        return "Config is missing its key map";
+    const actions = Object.keys(defaults.keys);
+    for (const action of Object.keys(keys))
+        if (!actions.includes(action)) return `Unknown action "${action}"`;
+    const bound = new Map<string, string>();
+    for (const action of actions as TabzAction[]) {
+        const key = (keys as Record<string, unknown>)[action];
+        if (typeof key !== "string" || !KEY_PATTERN.test(key))
+            return `${action}: key must be a single letter or one of 0 $ , . ;`;
+        const taken = bound.get(key);
+        if (taken) return `${taken} and ${action} are both bound to "${key}"`;
+        bound.set(key, action);
+    }
+    return null;
+}
+
+async function effectiveConfig(defaults: TabzConfig): Promise<TabzConfig> {
+    const stored = await chrome.storage.sync.get("config");
+    const merged = mergeConfig(defaults, stored["config"]);
+    return validateConfig(merged, defaults) === null ? merged : defaults;
+}
+
 type GroupColor = `${chrome.tabGroups.Color}`;
 
 const GROUP_COLORS = [
@@ -104,6 +165,25 @@ async function handleMessage(
     msg: TabzMessage,
     sender?: chrome.runtime.MessageSender,
 ): Promise<TabzResponse> {
+    switch (msg.type) {
+        case "getConfig": {
+            const defaults = await configDefaults();
+            return {
+                ok: true,
+                config: { current: await effectiveConfig(defaults), defaults },
+            };
+        }
+
+        case "validateConfig":
+        case "setConfig": {
+            const err = validateConfig(msg.config, await configDefaults());
+            if (err) return { ok: false, notice: err };
+            if (msg.type === "validateConfig") return { ok: true };
+            await chrome.storage.sync.set({ config: msg.config });
+            return { ok: true, notice: "Saved" };
+        }
+    }
+
     const tab = await resolveTab(sender);
     if (!tab) return { ok: false, notice: "No active tab" };
     const tabs = await windowTabs(tab.windowId);

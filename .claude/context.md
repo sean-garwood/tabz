@@ -13,10 +13,15 @@
   winning the listener race; see Key constraints)
 - Group "delete" is non-destructive: `sQ` dissolves the group (ungroups
   members), closes nothing
-- No persistence of any kind: no chrome.storage, no localStorage, no network;
-  service worker is stateless
+- Keys are configurable (2026-06): defaults ship in top-level `config.json`,
+  user overrides persist in `chrome.storage.sync` (the only persistence; no
+  localStorage, no network). Edited via the options page; the service worker
+  validates before anything is stored. Bindable keys: `a-z A-Z 0 $ , . ;`;
+  digits 1-9 stay reserved for counts and the leader may not be `0`. Vimium
+  conflict avoidance applies to the defaults only; users who rebind onto
+  Vimium keys own the conflict.
 
-## Keybindings
+## Keybindings (defaults)
 
 **Subject to change at any time. More for the user's sake than the bot.**
 Leader is `s`. Counts go before or after the leader (`3sw` or `s3w`), move

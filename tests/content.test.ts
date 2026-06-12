@@ -1,5 +1,5 @@
 import { expect, test, beforeEach } from "vitest";
-import { loadScript } from "./chrome-mock";
+import { defaultConfig, loadScript } from "./chrome-mock";
 
 interface ParseResult {
     handled: boolean;
@@ -7,7 +7,10 @@ interface ParseResult {
 }
 
 interface ContentExports {
-    createSequenceParser: (now?: () => number) => {
+    createSequenceParser: (
+        config: TabzConfig,
+        now?: () => number,
+    ) => {
         feed: (key: string) => ParseResult;
         reset: () => void;
     };
@@ -22,9 +25,9 @@ const { createSequenceParser, isEditableTarget } = loadScript<ContentExports>(
     ["createSequenceParser", "isEditableTarget"],
 );
 
-function makeParser() {
+function makeParser(config = defaultConfig()) {
     let t = 1000;
-    const parser = createSequenceParser(() => t);
+    const parser = createSequenceParser(config, () => t);
     return { parser, tick: (ms: number) => (t += ms) };
 }
 
@@ -120,6 +123,39 @@ test("Escape while idle clears a pending count and passes through", () => {
     expect(parser.feed("Escape")).toEqual({ handled: false });
     const results = feedAll(parser, ["s", "e"]);
     expect(results[1].command).toEqual({ type: "move", delta: 1 });
+});
+
+test("a custom leader and rebound key drive the sequence map", () => {
+    const config = defaultConfig();
+    config.leader = ",";
+    config.keys.moveLeft = "h";
+    const custom = makeParser(config).parser;
+    expect(feedAll(custom, [",", "h"])[1].command).toEqual({
+        type: "move",
+        delta: -1,
+    });
+    expect(feedAll(custom, ["s", "w"]).some((r) => r.handled)).toBe(false);
+});
+
+test("the old key is freed when an action is rebound", () => {
+    const config = defaultConfig();
+    config.keys.moveStart = "g";
+    const custom = makeParser(config).parser;
+    expect(feedAll(custom, ["s", "g"])[1].command).toEqual({
+        type: "moveEdge",
+        edge: "start",
+    });
+    expect(feedAll(custom, ["s", "0"])[1]).toEqual({ handled: false });
+});
+
+test("counts still work under a rebound leader", () => {
+    const config = defaultConfig();
+    config.leader = ".";
+    const custom = makeParser(config).parser;
+    expect(feedAll(custom, [".", "3", "e"])[2].command).toEqual({
+        type: "move",
+        delta: 3,
+    });
 });
 
 test("isEditableTarget recognizes inputs and contenteditable", () => {

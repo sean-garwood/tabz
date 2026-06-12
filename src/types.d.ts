@@ -3,6 +3,29 @@
 // scripts: MV3 content scripts cannot be ES modules, so the compiled output
 // must have no module wrapper.
 
+// One name per user-facing operation; config.json and chrome.storage key
+// bindings by these names, and the content script maps them to commands.
+type TabzAction =
+    | "moveLeft"
+    | "moveRight"
+    | "moveStart"
+    | "moveEnd"
+    | "createGroup"
+    | "joinGroup"
+    | "ungroup"
+    | "dissolveGroup"
+    | "regexClose";
+
+interface TabzConfig {
+    leader: string;
+    keys: Record<TabzAction, string>;
+}
+
+interface TabzConfigPayload {
+    current: TabzConfig;
+    defaults: TabzConfig;
+}
+
 interface TabzMessageMap {
     move: { delta: number };
     moveEdge: { edge: "start" | "end" };
@@ -12,6 +35,9 @@ interface TabzMessageMap {
     dissolveGroup: {};
     countMatches: { pattern: string };
     closeMatches: { pattern: string };
+    getConfig: {};
+    validateConfig: { config: TabzConfig };
+    setConfig: { config: TabzConfig };
 }
 
 type TabzMessageType = keyof TabzMessageMap;
@@ -31,7 +57,7 @@ type TabzCommand = {
 }[keyof TabzCommandMap];
 
 type TabzResponse =
-    | { ok: true; notice?: string; count?: number }
+    | { ok: true; notice?: string; count?: number; config?: TabzConfigPayload }
     | { ok: false; notice: string };
 
 // Tab whose id is guaranteed present (always true for queried tabs with the

@@ -28,6 +28,7 @@ export interface MockState {
     removed: number[];
     nextGroupId: number;
     focusedWindowId: number;
+    stored: Record<string, unknown>;
     listeners: {
         message?: (
             msg: TabzMessage,
@@ -59,13 +60,19 @@ const TAB_DEFAULTS = {
 export function createChromeMock({
     tabs = [],
     groups = {},
-}: { tabs?: MockTabInit[]; groups?: Record<number, MockGroup> } = {}) {
+    stored = {},
+}: {
+    tabs?: MockTabInit[];
+    groups?: Record<number, MockGroup>;
+    stored?: Record<string, unknown>;
+} = {}) {
     const state: MockState = {
         tabs: [],
         groups: { ...groups },
         removed: [],
         nextGroupId: 100,
         focusedWindowId: 1,
+        stored: { ...stored },
         listeners: {},
     };
 
@@ -94,6 +101,7 @@ export function createChromeMock({
     const chrome = {
         runtime: {
             id: "mock",
+            getURL: (path: string) => `chrome-extension://mock/${path}`,
             onMessage: {
                 addListener: (
                     fn: NonNullable<MockState["listeners"]["message"]>,
@@ -164,9 +172,35 @@ export function createChromeMock({
                     info,
                 ),
         },
+        storage: {
+            sync: {
+                get: async (key: string) =>
+                    key in state.stored ? { [key]: state.stored[key] } : {},
+                set: async (items: Record<string, unknown>) => {
+                    Object.assign(state.stored, items);
+                },
+            },
+            onChanged: { addListener: () => {} },
+        },
     };
 
     return { chrome, state };
+}
+
+// Serves packaged extension files from the repo root, standing in for the
+// service worker's fetch of chrome.runtime.getURL resources.
+export function fetchMock(url: string) {
+    const file = url.replace("chrome-extension://mock/", "");
+    return Promise.resolve({
+        json: async () =>
+            JSON.parse(fs.readFileSync(path.join(ROOT, file), "utf8")),
+    });
+}
+
+export function defaultConfig(): TabzConfig {
+    return JSON.parse(
+        fs.readFileSync(path.join(ROOT, "config.json"), "utf8"),
+    ) as TabzConfig;
 }
 
 // Evaluates a compiled extension script in this realm, with each `sandbox`
