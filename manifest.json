@@ -6,12 +6,12 @@
   "description": "Vim-style tab management that coexists with Vimium: move, group, and regex-close tabs. No data collected, nothing stored.",
   "permissions": ["tabs", "tabGroups"],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "dist/background.js"
   },
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*", "file://*/*"],
-      "js": ["content.js"],
+      "js": ["dist/content.js"],
       "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true

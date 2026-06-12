@@ -11,7 +11,7 @@ const COUNT_LIMIT = 99;
 const TOAST_MS = 1600;
 const PREVIEW_DEBOUNCE_MS = 80;
 
-const SEQUENCE_COMMANDS = {
+const SEQUENCE_COMMANDS: Record<string, (count: number) => TabzCommand> = {
     w: (count) => ({ type: "move", delta: -count }),
     e: (count) => ({ type: "move", delta: count }),
     0: () => ({ type: "moveEdge", edge: "start" }),
@@ -33,7 +33,7 @@ function createSequenceParser(now = Date.now) {
         pending = false;
     }
 
-    function feed(key) {
+    function feed(key: string): { handled: boolean; command?: TabzCommand } {
         const at = now();
         if (at - lastAt > SEQUENCE_TIMEOUT_MS) reset();
         lastAt = at;
@@ -74,23 +74,24 @@ function createSequenceParser(now = Date.now) {
     return { feed, reset };
 }
 
-function isEditableTarget(event) {
-    const el = (event.composedPath && event.composedPath()[0]) || event.target;
-    if (!el || el.nodeType !== 1) return false;
+function isEditableTarget(event: Event | { composedPath?: () => EventTarget[]; target: EventTarget | null }): boolean {
+    const el = (event.composedPath && event.composedPath()[0]) || (event as Event).target;
+    if (!el || (el as Node).nodeType !== 1) return false;
+    const elem = el as HTMLElement;
     return (
-        el.isContentEditable ||
-        ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)
+        elem.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(elem.tagName)
     );
 }
 
-function createHud(send) {
-    let host = null;
-    let shadow = null;
-    let prompt = null;
+function createHud(send: (msg: TabzMessage) => Promise<TabzResponse>) {
+    let host: HTMLElement | null = null;
+    let shadow: ShadowRoot | null = null;
+    let prompt: { input: HTMLInputElement; status: HTMLElement } | null = null;
     let toastTimer = 0;
     let previewTimer = 0;
 
-    function render(body) {
+    function render(body: string) {
         if (!host || !host.isConnected) {
             host = document.createElement("tabz-hud");
             host.style.cssText =
@@ -99,7 +100,7 @@ function createHud(send) {
             shadow = host.attachShadow({ mode: "open" });
             (document.body || document.documentElement).appendChild(host);
         }
-        shadow.innerHTML = `<style>
+        shadow!.innerHTML = `<style>
       :host { all: initial; }
       .box { display: flex; align-items: center; gap: 8px; white-space: nowrap;
              font: 12px/1.4 system-ui, sans-serif; color: #e6edf3; background: #1c2128;
@@ -119,16 +120,16 @@ function createHud(send) {
         if (host) host.remove();
     }
 
-    function toast(text) {
+    function toast(text: string) {
         render('<div class="box"><span class="msg"></span></div>');
-        shadow.querySelector(".msg").textContent = text;
+        shadow!.querySelector(".msg")!.textContent = text;
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => {
+        toastTimer = window.setTimeout(() => {
             if (!prompt) close();
         }, TOAST_MS);
     }
 
-    function setStatus(text, isError) {
+    function setStatus(text: string, isError: boolean) {
         if (!prompt) return;
         prompt.status.textContent = text;
         prompt.status.className = isError ? "status err" : "status";
@@ -136,7 +137,7 @@ function createHud(send) {
 
     function schedulePreview() {
         clearTimeout(previewTimer);
-        previewTimer = setTimeout(async () => {
+        previewTimer = window.setTimeout(async () => {
             if (!prompt) return;
             const pattern = prompt.input.value;
             if (!pattern) return setStatus("", false);
@@ -145,7 +146,7 @@ function createHud(send) {
             setStatus(
                 res.ok
                     ? `${res.count} match${res.count === 1 ? "" : "es"}`
-                    : res.notice,
+                    : res.notice!,
                 !res.ok,
             );
         }, PREVIEW_DEBOUNCE_MS);
@@ -157,11 +158,11 @@ function createHud(send) {
         if (!pattern) return close();
         const res = await send({ type: "closeMatches", pattern });
         if (!prompt) return;
-        if (res.ok && res.count > 0) {
+        if (res.ok && res.count! > 0) {
             close();
-            toast(res.notice);
+            toast(res.notice!);
         } else {
-            setStatus(res.ok ? "0 matches" : res.notice, !res.ok);
+            setStatus(res.ok ? "0 matches" : res.notice!, !res.ok);
         }
     }
 
@@ -171,8 +172,8 @@ function createHud(send) {
                 '<input type="text" spellcheck="false" autocomplete="off"><span class="status"></span></div>',
         );
         prompt = {
-            input: shadow.querySelector("input"),
-            status: shadow.querySelector(".status"),
+            input: shadow!.querySelector("input")!,
+            status: shadow!.querySelector(".status")!,
         };
         prompt.input.addEventListener("input", schedulePreview);
         prompt.input.addEventListener("blur", close);
@@ -183,7 +184,7 @@ function createHud(send) {
     // other extension listening on window; characters still land in the input
     // through the browser's default action, which stopImmediatePropagation does
     // not cancel.
-    function handlePromptKey(event) {
+    function handlePromptKey(event: KeyboardEvent) {
         event.stopImmediatePropagation();
         if (event.key === "Enter") {
             event.preventDefault();
@@ -203,8 +204,8 @@ function createHud(send) {
 }
 
 function install() {
-    const send = (msg) =>
-        chrome.runtime.sendMessage(msg).catch((err) => ({
+    const send = (msg: TabzMessage): Promise<TabzResponse> =>
+        chrome.runtime.sendMessage(msg).catch((err: Error) => ({
             ok: false,
             notice: `Tabz: ${err.message || err}`,
         }));
@@ -226,7 +227,7 @@ function install() {
             event.stopImmediatePropagation();
             if (!action.command) return;
             if (action.command.type === "prompt") return hud.openPrompt();
-            send(action.command).then((res) => {
+            send(action.command as TabzMessage).then((res) => {
                 if (res && res.notice) hud.toast(res.notice);
             });
         },
