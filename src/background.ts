@@ -1,9 +1,113 @@
 const NO_GROUP = -1;
 
-// Bindable keys: letters, 0, $, and ,.; (digits 1-9 are reserved for count
-// prefixes).
-const KEY_PATTERN = /^[a-zA-Z0$,.;]$/;
-const LEADER_PATTERN = /^[a-zA-Z,.;]$/;
+// Schema for TabzConfig fields; both parseConfig (lenient, for stored data)
+// and validateConfig (strict, for options-page submissions) enforce it.
+// Digits 1-9 are reserved for count prefixes, and "0" would shadow a count in
+// progress as the leader, so neither is leader-bindable.
+interface FieldRule {
+    pattern: RegExp;
+    expected: string;
+}
+
+const CONFIG_SCHEMA: { leader: FieldRule; key: FieldRule } = {
+    leader: {
+        pattern: /^[a-zA-Z,.;]$/,
+        expected: "a single letter or one of , . ;",
+    },
+    key: {
+        pattern: /^[a-zA-Z0$,.;]$/,
+        expected: "a single letter or one of 0 $ , . ;",
+    },
+};
+
+function fieldError(rule: FieldRule, name: string, value: unknown) {
+    return typeof value === "string" && rule.pattern.test(value)
+        ? null
+        : `${name} must be ${rule.expected}`;
+}
+
+function duplicateBinding(keys: Record<TabzAction, string>): string | null {
+    const bound = new Map<string, string>();
+    for (const [action, key] of Object.entries(keys)) {
+        const taken = bound.get(key);
+        if (taken) return `${taken} and ${action} are both bound to "${key}"`;
+        bound.set(key, action);
+    }
+    return null;
+}
+
+interface ParsedConfig {
+    config: TabzConfig;
+    warnings: string[];
+}
+
+// Checks untrusted stored data against the schema. Valid fields overlay the
+// shipped defaults; anything invalid or unknown keeps its default and is
+// reported as a warning so the user learns their override was rejected.
+function parseConfig(defaults: TabzConfig, stored: unknown): ParsedConfig {
+    const config: TabzConfig = {
+        leader: defaults.leader,
+        keys: { ...defaults.keys },
+    };
+    const warnings: string[] = [];
+    if (stored === undefined) return { config, warnings };
+    if (typeof stored !== "object" || stored === null)
+        return { config, warnings: ["Stored config is not an object"] };
+
+    const { leader, keys } = stored as Record<keyof TabzConfig, unknown>;
+    if (leader !== undefined) {
+        const err = fieldError(CONFIG_SCHEMA.leader, "leader", leader);
+        if (err) warnings.push(err);
+        else config.leader = leader as string;
+    }
+    if (keys !== undefined) {
+        if (typeof keys !== "object" || keys === null)
+            warnings.push("keys must be an object");
+        else
+            for (const [action, key] of Object.entries(keys)) {
+                if (!(action in defaults.keys)) {
+                    warnings.push(`Unknown action "${action}"`);
+                    continue;
+                }
+                const err = fieldError(CONFIG_SCHEMA.key, action, key);
+                if (err) warnings.push(err);
+                else config.keys[action as TabzAction] = key as string;
+            }
+    }
+
+    // Individually valid overrides can still collide with each other or with
+    // an untouched default; the merged result must stay conflict-free.
+    const conflict = duplicateBinding(config.keys);
+    if (conflict)
+        return {
+            config: { leader: defaults.leader, keys: { ...defaults.keys } },
+            warnings: [...warnings, `${conflict}; using default bindings`],
+        };
+    return { config, warnings };
+}
+
+// Strict whole-config check for validateConfig/setConfig messages: every
+// field must satisfy the schema, nothing is silently dropped.
+function validateConfig(config: unknown, defaults: TabzConfig): string | null {
+    if (typeof config !== "object" || config === null)
+        return "Config must be an object";
+    const { leader, keys } = config as Record<keyof TabzConfig, unknown>;
+    const leaderErr = fieldError(CONFIG_SCHEMA.leader, "Leader", leader);
+    if (leaderErr) return leaderErr;
+    if (typeof keys !== "object" || keys === null)
+        return "Config is missing its key map";
+    for (const action of Object.keys(keys))
+        if (!(action in defaults.keys)) return `Unknown action "${action}"`;
+    for (const action of Object.keys(defaults.keys)) {
+        const err = fieldError(
+            CONFIG_SCHEMA.key,
+            action,
+            (keys as Record<string, unknown>)[action],
+        );
+        if (err) return err;
+    }
+    return duplicateBinding(keys as Record<TabzAction, string>);
+}
 
 let defaultsPromise: Promise<TabzConfig> | undefined;
 
@@ -14,50 +118,9 @@ function configDefaults(): Promise<TabzConfig> {
     return defaultsPromise;
 }
 
-// Overlays whatever valid-looking pieces storage holds onto the shipped
-// defaults; unknown actions and non-string values are dropped.
-function mergeConfig(defaults: TabzConfig, stored: unknown): TabzConfig {
-    const merged: TabzConfig = {
-        leader: defaults.leader,
-        keys: { ...defaults.keys },
-    };
-    if (typeof stored !== "object" || stored === null) return merged;
-    const { leader, keys } = stored as Partial<TabzConfig>;
-    if (typeof leader === "string") merged.leader = leader;
-    if (typeof keys === "object" && keys !== null)
-        for (const action of Object.keys(defaults.keys) as TabzAction[])
-            if (typeof keys[action] === "string")
-                merged.keys[action] = keys[action];
-    return merged;
-}
-
-function validateConfig(config: unknown, defaults: TabzConfig): string | null {
-    if (typeof config !== "object" || config === null)
-        return "Config must be an object";
-    const { leader, keys } = config as Partial<TabzConfig>;
-    if (typeof leader !== "string" || !LEADER_PATTERN.test(leader))
-        return "Leader must be a single letter or one of $ , . ;";
-    if (typeof keys !== "object" || keys === null)
-        return "Config is missing its key map";
-    const actions = Object.keys(defaults.keys);
-    for (const action of Object.keys(keys))
-        if (!actions.includes(action)) return `Unknown action "${action}"`;
-    const bound = new Map<string, string>();
-    for (const action of actions as TabzAction[]) {
-        const key = (keys as Record<string, unknown>)[action];
-        if (typeof key !== "string" || !KEY_PATTERN.test(key))
-            return `${action}: key must be a single letter or one of 0 $ , . ;`;
-        const taken = bound.get(key);
-        if (taken) return `${taken} and ${action} are both bound to "${key}"`;
-        bound.set(key, action);
-    }
-    return null;
-}
-
-async function effectiveConfig(defaults: TabzConfig): Promise<TabzConfig> {
+async function effectiveConfig(defaults: TabzConfig): Promise<ParsedConfig> {
     const stored = await chrome.storage.sync.get("config");
-    const merged = mergeConfig(defaults, stored["config"]);
-    return validateConfig(merged, defaults) === null ? merged : defaults;
+    return parseConfig(defaults, stored["config"]);
 }
 
 type GroupColor = `${chrome.tabGroups.Color}`;
@@ -167,9 +230,10 @@ async function handleMessage(
     switch (msg.type) {
         case "getConfig": {
             const defaults = await configDefaults();
+            const { config, warnings } = await effectiveConfig(defaults);
             return {
                 ok: true,
-                config: { current: await effectiveConfig(defaults), defaults },
+                config: { current: config, defaults, warnings },
             };
         }
 

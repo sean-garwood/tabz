@@ -1,4 +1,5 @@
 const SEQUENCE_TIMEOUT_MS = 2000;
+const CONFIG_RETRY_DELAYS_MS = [500, 1000, 2000];
 const COUNT_LIMIT = 99;
 const TOAST_MS = 1600;
 const PREVIEW_DEBOUNCE_MS = 80;
@@ -106,7 +107,7 @@ function isEditableTarget(
     );
 }
 
-function createHud(send: (msg: TabzMessage) => Promise<TabzResponse>) {
+function createHud(send: TabzSendFn) {
     let hud: { host: HTMLElement; shadow: ShadowRoot } | null = null;
     let prompt: { input: HTMLInputElement; status: HTMLElement } | null = null;
     let toastTimer = 0;
@@ -224,20 +225,28 @@ function createHud(send: (msg: TabzMessage) => Promise<TabzResponse>) {
 }
 
 function install() {
-    const send = (msg: TabzMessage): Promise<TabzResponse> =>
-        chrome.runtime.sendMessage(msg).catch((err: Error) => ({
-            ok: false as const,
-            notice: `Tabz: ${err.message || err}`,
-        }));
-    const hud = createHud(send);
+    const hud = createHud(tabzSendMessage);
     let parser: ReturnType<typeof createSequenceParser> | undefined;
 
     // Keys pass through untouched until the config arrives; the parser is
     // rebuilt whenever the user saves new bindings on the options page.
+    // Failures (worker mid-restart, extension just updated) are retried with
+    // backoff; if they persist, the top frame warns once instead of leaving
+    // the user to discover that no binding works.
     async function loadConfig() {
-        const res = await send({ type: "getConfig" });
-        if (res.ok && res.config)
-            parser = createSequenceParser(res.config.current);
+        for (const delayMs of [...CONFIG_RETRY_DELAYS_MS, null]) {
+            const res = await tabzSendMessage({ type: "getConfig" });
+            if (res.ok) {
+                parser = createSequenceParser(res.config.current);
+                return;
+            }
+            if (delayMs === null) {
+                if (window === window.top)
+                    hud.toast("Tabz: key bindings failed to load");
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
     }
     loadConfig();
     chrome.storage.onChanged.addListener((_changes, area) => {
@@ -260,7 +269,7 @@ function install() {
             event.stopImmediatePropagation();
             if (!action.command) return;
             if (action.command.type === "prompt") return hud.openPrompt();
-            send(action.command).then((res) => {
+            tabzSendMessage(action.command).then((res) => {
                 if (res && res.notice) hud.toast(res.notice);
             });
         },

@@ -16,6 +16,9 @@ MV3 extension:
   them; owns config: fetches `config.json`, overlays user overrides from
   `chrome.storage.sync`, and validates bindings (`getConfig` /
   `validateConfig` / `setConfig` messages)
+- `messaging.ts`: shared `tabzSendMessage` helper (typed per message via
+  `TabzResponseFor`); loaded as a classic script before `content.js` and
+  `options.js`, so it is a shared global rather than a module export
 - `content.ts`: thin key listener injected into pages; builds its sequence map
   from the effective config (rebuilt on `storage.onChanged`); parses key
   sequences (including count prefixes like `3<key>`); sends messages to service

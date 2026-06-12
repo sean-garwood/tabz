@@ -12,13 +12,6 @@ const ACTION_LABELS: Record<TabzAction, string> = {
     regexClose: "Open the regex-close prompt",
 };
 
-function sendMessage(msg: TabzMessage): Promise<TabzResponse> {
-    return chrome.runtime.sendMessage(msg).catch((err: Error) => ({
-        ok: false as const,
-        notice: `Tabz: ${err.message || err}`,
-    }));
-}
-
 function requireEl<T extends Element>(selector: string): T {
     const el = document.querySelector<T>(selector);
     if (!el) throw new Error(`Tabz options: missing ${selector}`);
@@ -60,17 +53,22 @@ async function initOptions() {
         status.className = isError ? "err" : "";
     }
 
-    const res = await sendMessage({ type: "getConfig" });
-    if (!res.ok || !res.config) {
-        setStatus(res.ok ? "Could not load config" : res.notice, true);
+    const res = await tabzSendMessage({ type: "getConfig" });
+    if (!res.ok) {
+        setStatus(res.notice, true);
         return;
     }
-    const { current, defaults } = res.config;
+    const { current, defaults, warnings } = res.config;
     const actions = Object.keys(defaults.keys) as TabzAction[];
 
     for (const action of actions)
         bindings.appendChild(bindingRow(action, current.keys[action]));
     leaderInput.value = current.leader;
+    if (warnings.length)
+        setStatus(
+            `Some stored bindings were invalid and reset: ${warnings.join("; ")}`,
+            true,
+        );
 
     const keyInputs = [...bindings.querySelectorAll<HTMLInputElement>("input")];
 
@@ -93,7 +91,7 @@ async function initOptions() {
     let validateRun = 0;
     async function revalidate() {
         const run = ++validateRun;
-        const result = await sendMessage({
+        const result = await tabzSendMessage({
             type: "validateConfig",
             config: readConfig(),
         });
@@ -118,7 +116,7 @@ async function initOptions() {
 
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const result = await sendMessage({
+        const result = await tabzSendMessage({
             type: "setConfig",
             config: readConfig(),
         });
@@ -138,4 +136,13 @@ async function initOptions() {
 }
 
 if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id)
-    initOptions();
+    initOptions().catch((err: unknown) => {
+        const message = `Tabz options failed to load: ${
+            err instanceof Error ? err.message : String(err)
+        }`;
+        const status = document.querySelector("#status");
+        if (status) {
+            status.textContent = message;
+            status.className = "err";
+        } else document.body.textContent = message;
+    });

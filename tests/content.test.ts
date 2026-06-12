@@ -163,6 +163,24 @@ test("counts still work under a rebound leader", () => {
     });
 });
 
+test("a missing binding is ignored rather than matched", () => {
+    const config = defaultConfig();
+    config.keys.createGroup = "";
+    const custom = makeParser(config).parser;
+    expect(feedAll(custom, ["s", "c"])[1]).toEqual({ handled: false });
+});
+
+test("markup smuggled into a binding never matches a keystroke", () => {
+    // The worker's schema rejects multi-character values before they reach the
+    // content script; even unsanitized, they map to no real event.key and are
+    // never interpreted as HTML.
+    const config = defaultConfig();
+    config.keys.moveLeft = "<script>alert(1)</script>";
+    const custom = makeParser(config).parser;
+    expect(feedAll(custom, ["s", "w"])[1]).toEqual({ handled: false });
+    expect(feedAll(custom, ["s", "<"])[1]).toEqual({ handled: false });
+});
+
 test("isEditableTarget recognizes inputs and contenteditable", () => {
     const evt = (el: object) => ({ composedPath: () => [el], target: el });
     expect(isEditableTarget(evt({ nodeType: 1, tagName: "INPUT" }))).toBe(true);
