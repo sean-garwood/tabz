@@ -8,6 +8,7 @@
             :root {
                 color-scheme: dark;
             }
+
             body {
                 margin: 0;
                 font:
@@ -16,23 +17,28 @@
                 color: #e6edf3;
                 background: #0d1117;
             }
+
             main {
                 max-width: 560px;
                 margin: 0 auto;
                 padding: 32px 16px 48px;
             }
+
             h1 {
                 font-size: 20px;
                 margin: 0 0 4px;
             }
+
             .hint {
                 color: #8b949e;
                 margin: 4px 0 20px;
             }
+
             table {
                 width: 100%;
                 border-collapse: collapse;
             }
+
             th {
                 text-align: left;
                 font-weight: 600;
@@ -40,10 +46,12 @@
                 padding: 6px 8px;
                 border-bottom: 1px solid #444c56;
             }
+
             td {
                 padding: 6px 8px;
                 border-bottom: 1px solid #21262d;
             }
+
             input {
                 width: 3ch;
                 text-align: center;
@@ -57,20 +65,24 @@
                 padding: 4px 6px;
                 outline: none;
             }
+
             input:focus {
                 border-color: #58a6ff;
             }
+
             .seq {
                 font:
                     13px/1.2 ui-monospace,
                     monospace;
                 color: #8b949e;
             }
+
             .buttons {
                 display: flex;
                 gap: 8px;
                 margin-top: 16px;
             }
+
             button {
                 font: inherit;
                 color: #e6edf3;
@@ -80,33 +92,38 @@
                 padding: 6px 14px;
                 cursor: pointer;
             }
+
             button[type="submit"] {
                 background: #238636;
                 border-color: #2ea043;
             }
+
             button:disabled {
                 opacity: 0.5;
                 cursor: not-allowed;
             }
+
             #status {
                 min-height: 1.5em;
                 margin: 12px 0 0;
                 color: #8b949e;
             }
+
             #status.err {
                 color: #f85149;
             }
         </style>
     </head>
+
     <body>
         <main>
             <h1>Tabz key bindings</h1>
             <p class="hint">
                 Sequences are leader + key, vim-style. Allowed keys: a-z, A-Z,
-                0, $, comma, period, semicolon. Digits 1-9 are reserved for
-                count prefixes, and the leader may not be 0. Bindings are not
-                checked against other extensions (Vimium included); avoiding
-                conflicts is up to you.
+                0, comma, period, semicolon.its 1-9 are reserved for count
+                prefixes, and the leader may not be 0. Bindings are not checked
+                against other extensions (Vimium included); avoiding conflicts
+                is up to you.
             </p>
             <form id="config-form">
                 <table>

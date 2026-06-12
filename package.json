@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "fmt": "prettier --write '**/*.{ts,json}'",
+    "fmt": "prettier --write '**/*.{html,json,ts}'",
     "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
