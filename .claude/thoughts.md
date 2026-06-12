@@ -8,11 +8,6 @@ should be: compat w/ any chromium-based browser (brave, firefox, etc.)
 current: regex only to close tabs
 want: regex to group tabs
 
-### configurable?
-- make config.json?
-- allow rebinding of keys?
-    - to some subset?
-    - to any?
 
 ### constraints to remove?
 

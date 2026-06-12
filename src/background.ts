@@ -1,10 +1,9 @@
 const NO_GROUP = -1;
 
 // Bindable keys: letters, 0, $, and ,.; (digits 1-9 are reserved for count
-// prefixes). The leader additionally may not be 0, which must keep its
-// count-extending role.
+// prefixes).
 const KEY_PATTERN = /^[a-zA-Z0$,.;]$/;
-const LEADER_PATTERN = /^[a-zA-Z$,.;]$/;
+const LEADER_PATTERN = /^[a-zA-Z,.;]$/;
 
 let defaultsPromise: Promise<TabzConfig> | undefined;
 
