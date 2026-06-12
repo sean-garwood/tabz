@@ -1,16 +1,21 @@
 ## things to think about
 
-is: Standalone extension, not a Vimium PR or fork
-maybe: vimium fork?
-
+### compatibility
 might be: chrome-specific?
 should be: compat w/ any chromium-based browser (brave, firefox, etc.)
 
-### feature ideas
-
-#### group tabs matching
-
+### group tabs matching
 current: regex only to close tabs
 want: regex to group tabs
 
-keybinding? `Ss`?
+### configurable?
+- make config.json?
+- allow rebinding of keys?
+    - to some subset?
+    - to any?
+
+### constraints to remove?
+
+Zero **runtime** dependencies is a hard rule (nothing from npm ships in the
+extension); devDependencies are fine when tried-and-true and few — currently
+only Vitest
