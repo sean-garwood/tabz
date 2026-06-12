@@ -1,12 +1,8 @@
-// Tabz service worker: owns every chrome.tabs / chrome.tabGroups call.
-// Stateless by design: nothing is read from or written to storage, and no
-// network requests are ever made.
-
 const NO_GROUP = -1;
 
 type GroupColor = `${chrome.tabGroups.Color}`;
 
-const GROUP_COLORS: GroupColor[] = [
+const GROUP_COLORS = [
     "grey",
     "blue",
     "red",
@@ -16,18 +12,24 @@ const GROUP_COLORS: GroupColor[] = [
     "purple",
     "cyan",
     "orange",
-];
+] as const satisfies readonly GroupColor[];
 
-const COMMAND_MESSAGES: Record<string, TabzMessage> = {
+const COMMAND_MESSAGES = {
     "move-left": { type: "move", delta: -1 },
     "move-right": { type: "move", delta: 1 },
     "create-group": { type: "createGroup" },
     ungroup: { type: "ungroup" },
-};
+} as const satisfies Record<string, TabzMessage>;
 
-function groupTitleFor(url: string | undefined): string {
+type CommandName = keyof typeof COMMAND_MESSAGES;
+
+function isCommandName(cmd: string): cmd is CommandName {
+    return cmd in COMMAND_MESSAGES;
+}
+
+function groupTitleFor(url: string): string {
     try {
-        const host = new URL(url ?? "").hostname.replace(/^www\./, "");
+        const host = new URL(url).hostname.replace(/^www\./, "");
         return host || "tabs";
     } catch {
         return "tabs";
@@ -36,15 +38,13 @@ function groupTitleFor(url: string | undefined): string {
 
 function groupColorFor(title: string): GroupColor {
     let hash = 0;
-    for (const ch of title) hash = (hash * 31 + ch.codePointAt(0)!) % 9973;
+    for (const ch of title) hash = (hash * 31 + ch.charCodeAt(0)) % 9973;
     return GROUP_COLORS[hash % GROUP_COLORS.length];
 }
 
-// Pinned tabs occupy a contiguous region at the start of the strip; a move
-// must stay inside the tab's own region or Chrome rejects it.
 function moveBounds(
-    tabs: chrome.tabs.Tab[],
-    tab: chrome.tabs.Tab,
+    tabs: ResolvedTab[],
+    tab: ResolvedTab,
 ): { min: number; max: number } {
     const pinnedCount = tabs.filter((t) => t.pinned).length;
     return tab.pinned
@@ -53,16 +53,15 @@ function moveBounds(
 }
 
 function clampMoveIndex(
-    tabs: chrome.tabs.Tab[],
-    tab: chrome.tabs.Tab,
+    tabs: ResolvedTab[],
+    tab: ResolvedTab,
     delta: number,
 ): number {
     const { min, max } = moveBounds(tabs, tab);
     return Math.min(max, Math.max(min, tab.index + delta));
 }
 
-// Nearest grouped tab by distance; the left one wins a tie.
-function findNearestGroupId(tabs: chrome.tabs.Tab[], index: number): number {
+function findNearestGroupId(tabs: ResolvedTab[], index: number): number {
     const grouped = tabs.filter((t) => t.groupId !== NO_GROUP);
     if (!grouped.length) return NO_GROUP;
     let best = grouped[0];
@@ -72,10 +71,7 @@ function findNearestGroupId(tabs: chrome.tabs.Tab[], index: number): number {
     return best.groupId;
 }
 
-function filterByPattern(
-    tabs: chrome.tabs.Tab[],
-    pattern: string,
-): chrome.tabs.Tab[] {
+function filterByPattern(tabs: ResolvedTab[], pattern: string): ResolvedTab[] {
     const re = new RegExp(pattern, "i");
     return tabs.filter(
         (t) => !t.pinned && (re.test(t.url || "") || re.test(t.title || "")),
@@ -86,25 +82,27 @@ function plural(n: number, word: string): string {
     return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-async function windowTabs(windowId: number): Promise<chrome.tabs.Tab[]> {
+function isResolvedTab(tab: chrome.tabs.Tab): tab is ResolvedTab {
+    return tab.id !== undefined;
+}
+
+async function windowTabs(windowId: number): Promise<ResolvedTab[]> {
     const tabs = await chrome.tabs.query({ windowId });
-    return tabs.sort((a, b) => a.index - b.index);
+    return tabs.filter(isResolvedTab).sort((a, b) => a.index - b.index);
 }
 
 async function resolveTab(
-    sender: chrome.runtime.MessageSender | null,
-): Promise<chrome.tabs.Tab | undefined> {
-    if (sender && sender.tab) return sender.tab;
-    const [tab] = await chrome.tabs.query({
-        active: true,
-        lastFocusedWindow: true,
-    });
-    return tab;
+    sender?: chrome.runtime.MessageSender,
+): Promise<ResolvedTab | undefined> {
+    const tab =
+        sender?.tab ??
+        (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
+    return tab && isResolvedTab(tab) ? tab : undefined;
 }
 
 async function handleMessage(
     msg: TabzMessage,
-    sender: chrome.runtime.MessageSender | null,
+    sender?: chrome.runtime.MessageSender,
 ): Promise<TabzResponse> {
     const tab = await resolveTab(sender);
     if (!tab) return { ok: false, notice: "No active tab" };
@@ -112,22 +110,22 @@ async function handleMessage(
 
     switch (msg.type) {
         case "move":
-            await chrome.tabs.move(tab.id!, {
+            await chrome.tabs.move(tab.id, {
                 index: clampMoveIndex(tabs, tab, msg.delta),
             });
             return { ok: true };
 
         case "moveEdge": {
             const { min, max } = moveBounds(tabs, tab);
-            await chrome.tabs.move(tab.id!, {
+            await chrome.tabs.move(tab.id, {
                 index: msg.edge === "start" ? min : max,
             });
             return { ok: true };
         }
 
         case "createGroup": {
-            const groupId = await chrome.tabs.group({ tabIds: [tab.id!] });
-            const title = groupTitleFor(tab.url);
+            const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
+            const title = groupTitleFor(tab.url ?? "");
             await chrome.tabGroups.update(groupId, {
                 title,
                 color: groupColorFor(title),
@@ -139,7 +137,7 @@ async function handleMessage(
             const groupId = findNearestGroupId(tabs, tab.index);
             if (groupId === NO_GROUP)
                 return { ok: false, notice: "No group nearby" };
-            await chrome.tabs.group({ tabIds: [tab.id!], groupId });
+            await chrome.tabs.group({ tabIds: [tab.id], groupId });
             const group = await chrome.tabGroups.get(groupId);
             return { ok: true, notice: `Joined: ${group.title || "group"}` };
         }
@@ -147,16 +145,15 @@ async function handleMessage(
         case "ungroup":
             if (tab.groupId === NO_GROUP)
                 return { ok: false, notice: "Not in a group" };
-            await chrome.tabs.ungroup(tab.id!);
+            await chrome.tabs.ungroup(tab.id);
             return { ok: true };
 
         case "dissolveGroup": {
             if (tab.groupId === NO_GROUP)
                 return { ok: false, notice: "Not in a group" };
             const members = tabs.filter((t) => t.groupId === tab.groupId);
-            await chrome.tabs.ungroup(
-                members.map((t) => t.id!) as [number, ...number[]],
-            );
+            const ids = members.map((t) => t.id);
+            await chrome.tabs.ungroup([ids[0], ...ids.slice(1)]);
             return {
                 ok: true,
                 notice: `Ungrouped ${plural(members.length, "tab")}`,
@@ -182,7 +179,7 @@ async function handleMessage(
             }
             if (matches.length === 0)
                 return { ok: true, count: 0, notice: "No matches" };
-            await chrome.tabs.remove(matches.map((t) => t.id!));
+            await chrome.tabs.remove(matches.map((t) => t.id));
             return {
                 ok: true,
                 count: matches.length,
@@ -205,6 +202,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.commands.onCommand.addListener((command) => {
-    const msg = COMMAND_MESSAGES[command];
-    if (msg) return handleMessage(msg, null).catch(() => {});
+    if (isCommandName(command))
+        return handleMessage(COMMAND_MESSAGES[command]).catch(() => {});
 });

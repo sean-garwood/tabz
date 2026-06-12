@@ -80,7 +80,9 @@ export function createChromeMock({
     }
 
     function byId(id: number): MockTab {
-        return state.tabs.find((t) => t.id === id)!;
+        const tab = state.tabs.find((t) => t.id === id);
+        if (!tab) throw new Error(`Mock tab ${id} not found`);
+        return tab;
     }
 
     function windowList(windowId: number): MockTab[] {
@@ -137,16 +139,16 @@ export function createChromeMock({
                 const gid = groupId ?? state.nextGroupId++;
                 if (!(gid in state.groups))
                     state.groups[gid] = { title: "", color: "" };
-                for (const id of ([] as number[]).concat(tabIds))
+                for (const id of Array<number>().concat(tabIds))
                     byId(id).groupId = gid;
                 return gid;
             },
             ungroup: async (ids: number | number[]) => {
-                for (const id of ([] as number[]).concat(ids))
+                for (const id of Array<number>().concat(ids))
                     byId(id).groupId = -1;
             },
             remove: async (ids: number | number[]) => {
-                const list = ([] as number[]).concat(ids);
+                const list = Array<number>().concat(ids);
                 state.removed.push(...list);
                 const windows = new Set(list.map((id) => byId(id).windowId));
                 state.tabs = state.tabs.filter((t) => !list.includes(t.id));
@@ -193,6 +195,8 @@ export function windowOrder(state: MockState, windowId: number): number[] {
         .map((t) => t.id);
 }
 
-export function tabById(state: MockState, id: number): MockTab | undefined {
-    return state.tabs.find((t) => t.id === id);
+export function tabById(state: MockState, id: number): MockTab {
+    const tab = state.tabs.find((t) => t.id === id);
+    if (!tab) throw new Error(`Tab ${id} not found in mock state`);
+    return tab;
 }

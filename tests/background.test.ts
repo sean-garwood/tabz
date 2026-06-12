@@ -12,11 +12,11 @@ import {
 interface BackgroundExports {
     handleMessage: (
         msg: TabzMessage,
-        sender: { tab?: MockTab } | null,
+        sender?: { tab?: MockTab },
     ) => Promise<TabzResponse>;
-    groupTitleFor: (url: string | undefined) => string;
+    groupTitleFor: (url: string) => string;
     groupColorFor: (title: string) => string;
-    GROUP_COLORS: string[];
+    GROUP_COLORS: readonly string[];
 }
 
 function setup(tabs: MockTabInit[], groups?: Record<number, MockGroup>) {
@@ -99,7 +99,7 @@ test("createGroup auto-names from the hostname and picks a palette color", async
     const res = await handle({ type: "createGroup" }, sender(1));
     expect(res.ok).toBe(true);
     expect(res.notice).toBe("Grouped: github.com");
-    expect(tabById(state, 1)!.groupId).toBe(100);
+    expect(tabById(state, 1).groupId).toBe(100);
     expect(state.groups[100].title).toBe("github.com");
     expect(exports.GROUP_COLORS).toContain(state.groups[100].color);
 });
@@ -127,7 +127,7 @@ test("joinGroup prefers the left group on a distance tie", async () => {
     );
     const res = await handle({ type: "joinGroup" }, sender(2));
     expect(res.notice).toBe("Joined: left");
-    expect(tabById(state, 2)!.groupId).toBe(5);
+    expect(tabById(state, 2).groupId).toBe(5);
 });
 
 test("joinGroup falls back to the nearest group on the right", async () => {
@@ -137,7 +137,7 @@ test("joinGroup falls back to the nearest group on the right", async () => {
     );
     const res = await handle({ type: "joinGroup" }, sender(2));
     expect(res.notice).toBe("Joined: right");
-    expect(tabById(state, 2)!.groupId).toBe(7);
+    expect(tabById(state, 2).groupId).toBe(7);
 });
 
 test("joinGroup reports when no group exists", async () => {
@@ -153,8 +153,8 @@ test("ungroup removes only the current tab", async () => {
     ]);
     const res = await handle({ type: "ungroup" }, sender(1));
     expect(res.ok).toBe(true);
-    expect(tabById(state, 1)!.groupId).toBe(-1);
-    expect(tabById(state, 2)!.groupId).toBe(5);
+    expect(tabById(state, 1).groupId).toBe(-1);
+    expect(tabById(state, 2).groupId).toBe(5);
 });
 
 test("ungroup reports when the tab is not grouped", async () => {
@@ -171,9 +171,9 @@ test("dissolveGroup ungroups every member and nothing else", async () => {
     ]);
     const res = await handle({ type: "dissolveGroup" }, sender(1));
     expect(res.notice).toBe("Ungrouped 2 tabs");
-    expect(tabById(state, 1)!.groupId).toBe(-1);
-    expect(tabById(state, 2)!.groupId).toBe(-1);
-    expect(tabById(state, 3)!.groupId).toBe(9);
+    expect(tabById(state, 1).groupId).toBe(-1);
+    expect(tabById(state, 2).groupId).toBe(-1);
+    expect(tabById(state, 3).groupId).toBe(9);
 });
 
 const REGEX_FIXTURE: MockTabInit[] = [
