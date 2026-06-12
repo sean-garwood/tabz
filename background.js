@@ -54,17 +54,13 @@ function clampMoveIndex(tabs, tab, delta) {
 
 // Nearest grouped tab by distance; the left one wins a tie.
 function findNearestGroupId(tabs, index) {
-    for (
-        let left = index - 1, right = index + 1;
-        left >= 0 || right < tabs.length;
-        left--, right++
-    ) {
-        if (left >= 0 && tabs[left].groupId !== NO_GROUP)
-            return tabs[left].groupId;
-        if (right < tabs.length && tabs[right].groupId !== NO_GROUP)
-            return tabs[right].groupId;
+    const grouped = tabs.filter((t) => t.groupId !== NO_GROUP);
+    if (!grouped.length) return NO_GROUP;
+    let best = grouped[0];
+    for (const t of grouped) {
+        if (Math.abs(t.index - index) < Math.abs(best.index - index)) best = t;
     }
-    return NO_GROUP;
+    return best.groupId;
 }
 
 function filterByPattern(tabs, pattern) {
