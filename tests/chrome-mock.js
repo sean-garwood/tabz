@@ -1,15 +1,15 @@
-"use strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const TAB_DEFAULTS = { pinned: false, groupId: -1, url: "", title: "", windowId: 1, active: false };
 
 // In-memory stand-in for the subset of the chrome.* API the extension uses.
 // Tab indices are authoritative and kept contiguous per window, mirroring
 // Chrome's remove-then-insert move semantics.
-function createChromeMock({ tabs = [], groups = {} } = {}) {
+export function createChromeMock({ tabs = [], groups = {} } = {}) {
   const state = {
     tabs: [],
     groups: { ...groups },
@@ -90,29 +90,28 @@ function createChromeMock({ tabs = [], groups = {} } = {}) {
   return { chrome, state };
 }
 
-// Runs an extension script in a fresh VM context; top-level function
-// declarations become properties of the returned context object. URL is not
-// part of a bare VM realm, so pass ours in.
-function loadScript(file, sandbox = {}) {
-  const code = fs.readFileSync(path.join(__dirname, "..", file), "utf8");
-  const context = vm.createContext({ URL, ...sandbox });
-  vm.runInContext(code, context, { filename: file });
-  return context;
+// Evaluates an extension script in this realm, with each `sandbox` entry
+// shadowing the corresponding global as a wrapper-function parameter, and
+// returns the top-level bindings listed in `names`. The extension files are
+// plain browser scripts with no module system, so this is the test-side
+// bridge; it imposes nothing on the source files (any `function`, `const`,
+// or `let` binding can be exported by name).
+export function loadScript(file, sandbox, names) {
+  const code = fs.readFileSync(path.join(ROOT, file), "utf8");
+  const factory = new Function(
+    ...Object.keys(sandbox),
+    `${code}\n;return { ${names.join(", ")} };`
+  );
+  return factory(...Object.values(sandbox));
 }
 
-function evalIn(context, expr) {
-  return vm.runInContext(expr, context);
-}
-
-function windowOrder(state, windowId) {
+export function windowOrder(state, windowId) {
   return state.tabs
     .filter((t) => t.windowId === windowId)
     .sort((a, b) => a.index - b.index)
     .map((t) => t.id);
 }
 
-function tabById(state, id) {
+export function tabById(state, id) {
   return state.tabs.find((t) => t.id === id);
 }
-
-module.exports = { createChromeMock, loadScript, evalIn, windowOrder, tabById };
