@@ -3,12 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "fmt": "prettier --write '**/*.{js,json,ts}'",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "fmt": "prettier --write '**/*.{ts,json}'",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/chrome": "^0.1.43",
+    "@types/node": "^25.9.3",
     "prettier": "^3.8.4",
+    "typescript": "^6.0.3",
     "vitest": "^3.2.4"
   }
 }

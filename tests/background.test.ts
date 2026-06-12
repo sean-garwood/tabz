@@ -4,21 +4,33 @@ import {
     loadScript,
     windowOrder,
     tabById,
-} from "./chrome-mock.js";
+    type MockGroup,
+    type MockTab,
+    type MockTabInit,
+} from "./chrome-mock";
 
-function setup(tabs, groups) {
+interface BackgroundExports {
+    handleMessage: (
+        msg: TabzMessage,
+        sender?: { tab?: MockTab },
+    ) => Promise<TabzResponse>;
+    groupTitleFor: (url: string) => string;
+    groupColorFor: (title: string) => string;
+    GROUP_COLORS: readonly string[];
+}
+
+function setup(tabs: MockTabInit[], groups?: Record<number, MockGroup>) {
     const { chrome, state } = createChromeMock({ tabs, groups });
-    const exports = loadScript("background.js", { chrome }, [
-        "handleMessage",
-        "groupTitleFor",
-        "groupColorFor",
-        "GROUP_COLORS",
-    ]);
+    const exports = loadScript<BackgroundExports>(
+        "dist/background.js",
+        { chrome },
+        ["handleMessage", "groupTitleFor", "groupColorFor", "GROUP_COLORS"],
+    );
     return {
         state,
         exports,
         handle: exports.handleMessage,
-        sender: (id) => ({ tab: tabById(state, id) }),
+        sender: (id: number) => ({ tab: tabById(state, id) }),
     };
 }
 
@@ -164,7 +176,7 @@ test("dissolveGroup ungroups every member and nothing else", async () => {
     expect(tabById(state, 3).groupId).toBe(9);
 });
 
-const REGEX_FIXTURE = [
+const REGEX_FIXTURE: MockTabInit[] = [
     { id: 1, url: "https://news.ycombinator.com", title: "HN" },
     { id: 2, url: "https://example.com", title: "Docs about NEWS" },
     {
@@ -220,8 +232,8 @@ test("closeMatches with no matches removes nothing", async () => {
 
 test("onMessage listener responds asynchronously and returns true", async () => {
     const { state } = setup([{ id: 1 }]);
-    const res = await new Promise((resolve) => {
-        const returned = state.listeners.message(
+    const res = await new Promise<TabzResponse>((resolve) => {
+        const returned = state.listeners.message!(
             { type: "ungroup" },
             { tab: tabById(state, 1) },
             resolve,
@@ -233,6 +245,6 @@ test("onMessage listener responds asynchronously and returns true", async () => 
 
 test("keyboard command acts on the active tab", async () => {
     const { state } = setup([{ id: 1, active: true }, { id: 2 }, { id: 3 }]);
-    await state.listeners.command("move-right");
+    await state.listeners.command!("move-right");
     expect(windowOrder(state, 1)).toEqual([2, 1, 3]);
 });

@@ -1,10 +1,3 @@
-// Tabz content script: a window-level key listener plus a small shadow-DOM
-// HUD; no other DOM mutation. Every key in the grammar, including the "s"
-// leader, is deliberately absent from Vimium's default bindings. That matters
-// because listener registration order between extensions is unspecified: if
-// Vimium's capture handler runs first, it would swallow any bound key even in
-// the middle of one of our sequences.
-
 const LEADER = "s";
 const SEQUENCE_TIMEOUT_MS = 2000;
 const COUNT_LIMIT = 99;
@@ -12,16 +5,22 @@ const TOAST_MS = 1600;
 const PREVIEW_DEBOUNCE_MS = 80;
 
 const SEQUENCE_COMMANDS = {
-    w: (count) => ({ type: "move", delta: -count }),
-    e: (count) => ({ type: "move", delta: count }),
-    0: () => ({ type: "moveEdge", edge: "start" }),
-    $: () => ({ type: "moveEdge", edge: "end" }),
-    c: () => ({ type: "createGroup" }),
-    a: () => ({ type: "joinGroup" }),
-    q: () => ({ type: "ungroup" }),
-    Q: () => ({ type: "dissolveGroup" }),
-    s: () => ({ type: "prompt" }),
+    w: (count: number): TabzCommand => ({ type: "move", delta: -count }),
+    e: (count: number): TabzCommand => ({ type: "move", delta: count }),
+    0: (): TabzCommand => ({ type: "moveEdge", edge: "start" }),
+    $: (): TabzCommand => ({ type: "moveEdge", edge: "end" }),
+    c: (): TabzCommand => ({ type: "createGroup" }),
+    a: (): TabzCommand => ({ type: "joinGroup" }),
+    q: (): TabzCommand => ({ type: "ungroup" }),
+    Q: (): TabzCommand => ({ type: "dissolveGroup" }),
+    s: (): TabzCommand => ({ type: "prompt" }),
 };
+
+type SequenceKey = `${keyof typeof SEQUENCE_COMMANDS}`;
+
+function isSequenceKey(key: string): key is SequenceKey {
+    return key in SEQUENCE_COMMANDS;
+}
 
 function createSequenceParser(now = Date.now) {
     let countBuf = "";
@@ -33,7 +32,7 @@ function createSequenceParser(now = Date.now) {
         pending = false;
     }
 
-    function feed(key) {
+    function feed(key: string): { handled: boolean; command?: TabzCommand } {
         const at = now();
         if (at - lastAt > SEQUENCE_TIMEOUT_MS) reset();
         lastAt = at;
@@ -61,45 +60,63 @@ function createSequenceParser(now = Date.now) {
             return { handled: true };
         }
 
-        const make = SEQUENCE_COMMANDS[key];
-        if (!make) {
+        if (!isSequenceKey(key)) {
             reset();
             return { handled: false };
         }
         const count = Math.min(COUNT_LIMIT, parseInt(countBuf || "1", 10));
         reset();
-        return { handled: true, command: make(count) };
+        return { handled: true, command: SEQUENCE_COMMANDS[key](count) };
     }
 
     return { feed, reset };
 }
 
-function isEditableTarget(event) {
-    const el = (event.composedPath && event.composedPath()[0]) || event.target;
-    if (!el || el.nodeType !== 1) return false;
+interface EditableElement {
+    nodeType: number;
+    tagName: string;
+    isContentEditable?: boolean;
+}
+
+function isEditableElement(el: unknown): el is EditableElement {
     return (
-        el.isContentEditable ||
+        typeof el === "object" &&
+        el !== null &&
+        "nodeType" in el &&
+        "tagName" in el
+    );
+}
+
+function isEditableTarget(
+    event:
+        | Event
+        | { composedPath?: () => EventTarget[]; target: EventTarget | null },
+): boolean {
+    const el = (event.composedPath?.() ?? [])[0] ?? event.target;
+    if (!isEditableElement(el) || el.nodeType !== 1) return false;
+    return (
+        el.isContentEditable === true ||
         ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)
     );
 }
 
-function createHud(send) {
-    let host = null;
-    let shadow = null;
-    let prompt = null;
+function createHud(send: (msg: TabzMessage) => Promise<TabzResponse>) {
+    let hud: { host: HTMLElement; shadow: ShadowRoot } | null = null;
+    let prompt: { input: HTMLInputElement; status: HTMLElement } | null = null;
     let toastTimer = 0;
     let previewTimer = 0;
 
-    function render(body) {
-        if (!host || !host.isConnected) {
-            host = document.createElement("tabz-hud");
+    function render(body: string): ShadowRoot {
+        if (!hud || !hud.host.isConnected) {
+            const host = document.createElement("tabz-hud");
             host.style.cssText =
                 "position:fixed !important;left:50% !important;bottom:28px !important;" +
                 "transform:translateX(-50%) !important;z-index:2147483647 !important;";
-            shadow = host.attachShadow({ mode: "open" });
+            const shadow = host.attachShadow({ mode: "open" });
             (document.body || document.documentElement).appendChild(host);
+            hud = { host, shadow };
         }
-        shadow.innerHTML = `<style>
+        hud.shadow.innerHTML = `<style>
       :host { all: initial; }
       .box { display: flex; align-items: center; gap: 8px; white-space: nowrap;
              font: 12px/1.4 system-ui, sans-serif; color: #e6edf3; background: #1c2128;
@@ -111,24 +128,26 @@ function createHud(send) {
       .status { color: #8b949e; min-width: 80px; }
       .status.err { color: #f85149; }
     </style>${body}`;
+        return hud.shadow;
     }
 
     function close() {
         clearTimeout(previewTimer);
         prompt = null;
-        if (host) host.remove();
+        if (hud) hud.host.remove();
     }
 
-    function toast(text) {
-        render('<div class="box"><span class="msg"></span></div>');
-        shadow.querySelector(".msg").textContent = text;
+    function toast(text: string) {
+        const root = render('<div class="box"><span class="msg"></span></div>');
+        const msg = root.querySelector(".msg");
+        if (msg) msg.textContent = text;
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => {
+        toastTimer = window.setTimeout(() => {
             if (!prompt) close();
         }, TOAST_MS);
     }
 
-    function setStatus(text, isError) {
+    function setStatus(text: string, isError: boolean) {
         if (!prompt) return;
         prompt.status.textContent = text;
         prompt.status.className = isError ? "status err" : "status";
@@ -136,7 +155,7 @@ function createHud(send) {
 
     function schedulePreview() {
         clearTimeout(previewTimer);
-        previewTimer = setTimeout(async () => {
+        previewTimer = window.setTimeout(async () => {
             if (!prompt) return;
             const pattern = prompt.input.value;
             if (!pattern) return setStatus("", false);
@@ -144,7 +163,7 @@ function createHud(send) {
             if (!prompt || prompt.input.value !== pattern) return;
             setStatus(
                 res.ok
-                    ? `${res.count} match${res.count === 1 ? "" : "es"}`
+                    ? `${res.count ?? 0} match${res.count === 1 ? "" : "es"}`
                     : res.notice,
                 !res.ok,
             );
@@ -157,33 +176,29 @@ function createHud(send) {
         if (!pattern) return close();
         const res = await send({ type: "closeMatches", pattern });
         if (!prompt) return;
-        if (res.ok && res.count > 0) {
+        if (res.ok && (res.count ?? 0) > 0) {
             close();
-            toast(res.notice);
+            toast(res.notice ?? "");
         } else {
             setStatus(res.ok ? "0 matches" : res.notice, !res.ok);
         }
     }
 
     function openPrompt() {
-        render(
+        const root = render(
             '<div class="box"><span>close tabs matching</span>' +
                 '<input type="text" spellcheck="false" autocomplete="off"><span class="status"></span></div>',
         );
-        prompt = {
-            input: shadow.querySelector("input"),
-            status: shadow.querySelector(".status"),
-        };
+        const input = root.querySelector<HTMLInputElement>("input");
+        const status = root.querySelector<HTMLElement>(".status");
+        if (!input || !status) return;
+        prompt = { input, status };
         prompt.input.addEventListener("input", schedulePreview);
         prompt.input.addEventListener("blur", close);
         prompt.input.focus();
     }
 
-    // While the prompt is open, keep keystrokes away from the page and from any
-    // other extension listening on window; characters still land in the input
-    // through the browser's default action, which stopImmediatePropagation does
-    // not cancel.
-    function handlePromptKey(event) {
+    function handlePromptKey(event: KeyboardEvent) {
         event.stopImmediatePropagation();
         if (event.key === "Enter") {
             event.preventDefault();
@@ -203,9 +218,9 @@ function createHud(send) {
 }
 
 function install() {
-    const send = (msg) =>
-        chrome.runtime.sendMessage(msg).catch((err) => ({
-            ok: false,
+    const send = (msg: TabzMessage): Promise<TabzResponse> =>
+        chrome.runtime.sendMessage(msg).catch((err: Error) => ({
+            ok: false as const,
             notice: `Tabz: ${err.message || err}`,
         }));
     const hud = createHud(send);

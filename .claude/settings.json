@@ -1,6 +1,10 @@
 {
   "permissions": {
-    "allow": ["Bash(node --test *)"]
+    "allow": [
+      "Bash(npx vitest run *)",
+      "Bash(npm test *)",
+      "Bash(npx prettier *)"
+    ]
   },
   "hooks": {
     "PostToolUse": [
@@ -9,9 +13,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node --test",
+            "command": "npx vitest run --reporter=json --silent=passed-only 2>/dev/null | jq '[.testResults[].assertionResults[] | select(.status == \"failed\")]' | grep -v '^\\[\\]$' || true",
             "statusMessage": "Running tests...",
-            "timeout": 30
+            "timeout": 5
           }
         ]
       }
