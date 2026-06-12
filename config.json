@@ -1,7 +1,0 @@
-{
-  "leader": "s",
-  "sequenceTimeoutMs": 2000,
-  "countLimit": 99,
-  "toastMs": 1600,
-  "previewDebounceMs": 80
-}
