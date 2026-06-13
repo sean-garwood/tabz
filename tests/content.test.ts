@@ -360,15 +360,10 @@ test("blur-during-remove doesn't crash: remove fires blur which re-enters close"
     hud.openPrompt();
     expect(hud.promptOpen()).toBe(true);
 
-    // Close with Escape. This calls remove(), which synchronously fires
-    // blur, which re-enters close(). The fix ensures hud is nulled first
-    // so the re-entrant close() is a no-op and doesn't crash.
     hud.handlePromptKey({
-        key: "Escape",
+        key: "Escape", // closes hud
         preventDefault: () => {},
         stopImmediatePropagation: () => {},
     } as KeyboardEvent);
-
-    // After close, the prompt should be closed
     expect(hud.promptOpen()).toBe(false);
 });
