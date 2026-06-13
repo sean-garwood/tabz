@@ -15,15 +15,22 @@ interface ContentExports {
         reset: () => void;
     };
     isEditableTarget: (event: unknown) => boolean;
+    createHud: (send: (msg: TabzMessage) => Promise<TabzResponse>) => {
+        toast: (text: string) => void;
+        openPrompt: () => void;
+        handlePromptKey: (event: KeyboardEvent) => void;
+        promptOpen: () => boolean;
+    };
 }
 
 // No chrome in the sandbox, so the script's install() guard keeps it from
 // wiring up any DOM listeners.
-const { createSequenceParser, isEditableTarget } = loadScript<ContentExports>(
-    "dist/content.js",
-    {},
-    ["createSequenceParser", "isEditableTarget"],
-);
+const { createSequenceParser, isEditableTarget, createHud } =
+    loadScript<ContentExports>(
+        "dist/content.js",
+        {},
+        ["createSequenceParser", "isEditableTarget", "createHud"],
+    );
 
 function makeParser(config = defaultConfig()) {
     let t = 1000;
@@ -284,4 +291,76 @@ test("isEditableTarget recognizes inputs and contenteditable", () => {
         isEditableTarget({ target: { nodeType: 1, tagName: "INPUT" } }),
     ).toBe(true);
     expect(isEditableTarget({ target: null })).toBe(false);
+});
+
+test("blur-during-remove doesn't crash: remove fires blur which re-enters close", async () => {
+    let blurHandlers: ((e: Event) => void)[] = [];
+    const mockInput = {
+        value: "",
+        addEventListener: (event: string, handler: (e: Event) => void) => {
+            if (event === "blur") blurHandlers.push(handler);
+        },
+        focus: () => {},
+    };
+
+    const mockStatus = {
+        textContent: "",
+        className: "",
+    };
+
+    const mockShadowRoot = {
+        innerHTML: "",
+        querySelector: (selector: string) => {
+            if (selector === "input") return mockInput;
+            if (selector === ".status") return mockStatus;
+            return null;
+        },
+    };
+
+    const mockHost = {
+        style: {},
+        isConnected: true,
+        attachShadow: () => mockShadowRoot,
+        remove: () => {
+            blurHandlers.forEach((h) => h(new Event("blur")));
+        },
+    };
+
+    const mockDoc = {
+        createElement: () => mockHost,
+        body: {
+            appendChild: (el: object) => el,
+        },
+        documentElement: {
+            appendChild: (el: object) => el,
+        },
+    };
+
+    const { createHud: createHudWithMock } = loadScript<{
+        createHud: (
+            send: (msg: TabzMessage) => Promise<TabzResponse>,
+        ) => ReturnType<typeof createHud>;
+    }>(
+        "dist/content.js",
+        { document: mockDoc },
+        ["createHud"],
+    );
+
+    const send = async (_msg: TabzMessage): Promise<TabzResponse> => ({
+        ok: true,
+        count: 0,
+        notice: "",
+    });
+
+    const hud = createHudWithMock(send);
+
+    hud.openPrompt();
+    expect(hud.promptOpen()).toBe(true);
+
+    hud.handlePromptKey({
+        key: "Escape", // closes hud
+        preventDefault: () => {},
+        stopImmediatePropagation: () => {},
+    } as KeyboardEvent);
+    expect(hud.promptOpen()).toBe(false);
 });
