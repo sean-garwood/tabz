@@ -203,12 +203,13 @@ export function defaultConfig(): TabzConfig {
     ) as TabzConfig;
 }
 
-// Evaluates a compiled extension script in this realm, with each `sandbox`
-// entry shadowing the corresponding global as a wrapper-function parameter,
-// and returns the top-level bindings listed in `names`. The compiled files
-// are plain browser scripts with no module system, so this is the test-side
-// bridge; it imposes nothing on the source files (any `function`, `const`,
-// or `let` binding can be exported by name).
+// Evaluates a compiled page-side script (content.js, messaging.js) in this
+// realm, with each `sandbox` entry shadowing the corresponding global as a
+// wrapper-function parameter, and returns the top-level bindings listed in
+// `names`. Those files compile to plain browser scripts with no module
+// system, so this is the test-side bridge; it imposes nothing on the source
+// files (any `function`, `const`, or `let` binding can be exported by name).
+// The service worker is an ES module instead; its tests import it directly.
 export function loadScript<T>(
     file: string,
     sandbox: Record<string, unknown>,
