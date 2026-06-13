@@ -135,7 +135,6 @@ function isEditableTarget(
     );
 }
 
-// Exported for testing
 function createHud(send: TabzSendFn) {
     let hud: { host: HTMLElement; shadow: ShadowRoot } | null = null;
     let prompt: { input: HTMLInputElement; status: HTMLElement } | null = null;
