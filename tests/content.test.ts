@@ -357,7 +357,6 @@ test("blur-during-remove doesn't crash: remove fires blur which re-enters close"
 
     const hud = createHudWithMock(send);
 
-    // Open the prompt
     hud.openPrompt();
     expect(hud.promptOpen()).toBe(true);
 
