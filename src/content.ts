@@ -20,24 +20,43 @@ const ACTION_COMMANDS: Record<TabzAction, CommandFactory> = {
     readingListRemove: () => ({ type: "readingListRemove" }),
 };
 
-function buildSequenceMap(config: TabzConfig): Map<string, CommandFactory> {
-    const map = new Map<string, CommandFactory>();
+interface TrieNode {
+    children: Map<string, TrieNode>;
+    factory?: CommandFactory;
+}
+
+// Bindings are validated prefix-free by the service worker, so every factory
+// sits on a leaf and a walk can never pass through a complete sequence.
+function buildSequenceTrie(config: TabzConfig): TrieNode {
+    const root: TrieNode = { children: new Map() };
     for (const action of Object.keys(ACTION_COMMANDS) as TabzAction[]) {
-        const key = config.keys[action];
-        if (key) map.set(key, ACTION_COMMANDS[action]);
+        const seq = config.keys[action];
+        if (!seq) continue;
+        let node = root;
+        for (const char of seq) {
+            let next = node.children.get(char);
+            if (!next) {
+                next = { children: new Map() };
+                node.children.set(char, next);
+            }
+            node = next;
+        }
+        node.factory = ACTION_COMMANDS[action];
     }
-    return map;
+    return root;
 }
 
 function createSequenceParser(config: TabzConfig, now = Date.now) {
-    const commands = buildSequenceMap(config);
+    const root = buildSequenceTrie(config);
+    // The cursor is null while idle; the leader sets it to the trie root and
+    // each matched sequence character advances it.
+    let cursor: TrieNode | null = null;
     let countBuf = "";
-    let pending = false;
     let lastAt = 0;
 
     function reset() {
         countBuf = "";
-        pending = false;
+        cursor = null;
     }
 
     function feed(key: string): { handled: boolean; command?: TabzCommand } {
@@ -50,9 +69,9 @@ function createSequenceParser(config: TabzConfig, now = Date.now) {
         // digit when a count is already in progress.
         const isCountDigit = isDigit && !(key === "0" && countBuf === "");
 
-        if (!pending) {
+        if (!cursor) {
             if (key === config.leader) {
-                pending = true;
+                cursor = root;
                 return { handled: true };
             }
             countBuf = isCountDigit ? countBuf + key : "";
@@ -63,19 +82,25 @@ function createSequenceParser(config: TabzConfig, now = Date.now) {
             reset();
             return { handled: true };
         }
-        if (isCountDigit) {
+        // Digits extend the count only before the sequence starts; mid-walk
+        // they are ordinary keys (1-9 are unbindable, so they reset below).
+        if (isCountDigit && cursor === root) {
             countBuf += key;
             return { handled: true };
         }
 
-        const toCommand = commands.get(key);
-        if (!toCommand) {
+        const next = cursor.children.get(key);
+        if (!next) {
             reset();
             return { handled: false };
         }
+        if (!next.factory) {
+            cursor = next;
+            return { handled: true };
+        }
         const count = Math.min(COUNT_LIMIT, parseInt(countBuf || "1", 10));
         reset();
-        return { handled: true, command: toCommand(count) };
+        return { handled: true, command: next.factory(count) };
     }
 
     return { feed, reset };

@@ -403,6 +403,26 @@ test("getConfig falls back to defaults when bindings collide, with a warning", a
     expect(warnings[0]).toMatch(/bound to "e"/);
 });
 
+test("getConfig honors a stored two-character override", async () => {
+    const { handle } = await setup([], undefined, {
+        config: { keys: { moveLeft: "gw" } },
+    });
+    const { current } = payloadOf(await handle({ type: "getConfig" }));
+    expect(current.keys.moveLeft).toBe("gw");
+});
+
+test("getConfig falls back to defaults when a stored binding prefixes another", async () => {
+    const { handle } = await setup([], undefined, {
+        config: { keys: { moveLeft: "ec" } },
+    });
+    const { current, warnings } = payloadOf(
+        await handle({ type: "getConfig" }),
+    );
+    expect(current).toEqual(defaultConfig());
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/prefix/);
+});
+
 test("getConfig keeps valid overrides and warns about invalid ones", async () => {
     const { handle } = await setup([], undefined, {
         config: {
@@ -454,13 +474,31 @@ test("setConfig persists a valid config and getConfig reflects it", async () => 
 
 test("setConfig rejects a key outside the allowed set", async () => {
     const { state, handle } = await setup([]);
-    for (const bad of ["1", "ww", "", "!"]) {
+    for (const bad of ["1", "www", "w1", "", "!"]) {
         const config = defaultConfig();
         config.keys.moveLeft = bad;
         const res = await handle({ type: "setConfig", config });
         expect(res.ok).toBe(false);
     }
     expect(state.stored).toEqual({});
+});
+
+test("setConfig persists two-character bindings", async () => {
+    const { state, handle } = await setup([]);
+    const config = defaultConfig();
+    config.keys.createGroup = "cg";
+    const res = await handle({ type: "setConfig", config });
+    expect(res.ok).toBe(true);
+    expect(state.stored["config"]).toEqual(config);
+});
+
+test("setConfig rejects a binding that prefixes another", async () => {
+    const { handle } = await setup([]);
+    const config = defaultConfig();
+    config.keys.createGroup = "wc";
+    const res = await handle({ type: "setConfig", config });
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.notice).toMatch(/prefix/);
 });
 
 test("setConfig rejects duplicate bindings", async () => {
