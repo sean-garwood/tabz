@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npx vitest run *)",
       "Bash(npm test *)",
-      "Bash(npx prettier *)"
+      "Bash(npx prettier *)",
+      "Agent(Explore)"
     ]
   },
   "hooks": {
