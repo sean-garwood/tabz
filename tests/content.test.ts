@@ -294,7 +294,6 @@ test("isEditableTarget recognizes inputs and contenteditable", () => {
 });
 
 test("blur-during-remove doesn't crash: remove fires blur which re-enters close", async () => {
-    // Create a document mock where remove() triggers blur on listeners
     let blurHandlers: ((e: Event) => void)[] = [];
     const mockInput = {
         value: "",
@@ -323,8 +322,6 @@ test("blur-during-remove doesn't crash: remove fires blur which re-enters close"
         isConnected: true,
         attachShadow: () => mockShadowRoot,
         remove: () => {
-            // When remove is called, trigger all blur handlers
-            // This simulates the blur event firing synchronously
             blurHandlers.forEach((h) => h(new Event("blur")));
         },
     };
