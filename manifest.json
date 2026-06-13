@@ -39,6 +39,9 @@
       "suggested_key": { "default": "Alt+Shift+Q" },
       "description": "Remove current tab from its group"
     },
+    "close-dups": {
+      "description": "Close duplicate tabs in the current window"
+    },
     "reading-list-add": {
       "description": "Add current tab to the reading list"
     },

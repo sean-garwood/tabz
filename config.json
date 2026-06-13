@@ -10,6 +10,7 @@
     "ungroup": "q",
     "dissolveGroup": "Q",
     "regexClose": "s",
+    "closeDups": "R",
     "readingListAdd": "A",
     "readingListRemove": "D"
   }

@@ -17,6 +17,7 @@ type TabzAction =
     | "ungroup"
     | "dissolveGroup"
     | "regexClose"
+    | "closeDups"
     | "readingListAdd"
     | "readingListRemove";
 
@@ -47,6 +48,7 @@ interface TabzTabMessageMap {
     dissolveGroup: {};
     readingListAdd: {};
     readingListRemove: {};
+    closeDups: {};
     countMatches: { pattern: string };
     closeMatches: { pattern: string };
 }
@@ -85,6 +87,7 @@ interface TabzResponseDataMap {
     joinGroup: {};
     ungroup: {};
     dissolveGroup: {};
+    closeDups: { count: number };
     readingListAdd: {};
     readingListRemove: {};
     countMatches: { count: number };

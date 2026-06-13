@@ -21,6 +21,7 @@ const COMMAND_MESSAGES = {
     "move-right": { type: "move", delta: 1 },
     "create-group": { type: "createGroup" },
     ungroup: { type: "ungroup" },
+    "close-dups": { type: "closeDups" },
     "reading-list-add": { type: "readingListAdd" },
     "reading-list-remove": { type: "readingListRemove" },
 } as const satisfies Record<string, TabzMessage>;
@@ -215,6 +216,24 @@ async function handleMessage(
                 return { ok: true, notice: "Not in reading list" };
             await chrome.readingList.removeEntry({ url: tab.url });
             return { ok: true, notice: "Removed from reading list" };
+        }
+
+        case "closeDups": {
+            const seen = new Map<string, number>();
+            const dupeIds: number[] = [];
+            for (const t of tabs) {
+                const url = t.url ?? "";
+                if (seen.has(url)) dupeIds.push(t.id);
+                else seen.set(url, t.id);
+            }
+            if (dupeIds.length === 0)
+                return { ok: true, count: 0, notice: "No duplicates" };
+            await chrome.tabs.remove(dupeIds);
+            return {
+                ok: true,
+                count: dupeIds.length,
+                notice: `Closed ${plural(dupeIds.length, "duplicate")}`,
+            };
         }
 
         case "countMatches":
