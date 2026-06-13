@@ -345,6 +345,51 @@ test("closeMatches with no matches removes nothing", async () => {
     expect(state.removed).toEqual([]);
 });
 
+test("closeDups removes duplicate tabs, keeping the first of each url", async () => {
+    const { state, handle, sender } = await setup([
+        { id: 1, url: "https://example.com" },
+        { id: 2, url: "https://other.com" },
+        { id: 3, url: "https://example.com" },
+        { id: 4, url: "https://example.com" },
+        { id: 5, url: "https://other.com" },
+    ]);
+    const res = await handle({ type: "closeDups" }, sender(1));
+    expect(res.ok).toBe(true);
+    expect(res.notice).toBe("Closed 3 duplicates");
+    expect(state.removed.sort()).toEqual([3, 4, 5]);
+    expect(windowOrder(state, 1)).toEqual([1, 2]);
+});
+
+test("closeDups with no duplicates removes nothing", async () => {
+    const { state, handle, sender } = await setup([
+        { id: 1, url: "https://a.com" },
+        { id: 2, url: "https://b.com" },
+        { id: 3, url: "https://c.com" },
+    ]);
+    const res = await handle({ type: "closeDups" }, sender(1));
+    expect(res).toEqual({ ok: true, count: 0, notice: "No duplicates" });
+    expect(state.removed).toEqual([]);
+});
+
+test("closeDups scopes to the sender's window", async () => {
+    const { state, handle, sender } = await setup([
+        { id: 1, url: "https://example.com", windowId: 1 },
+        { id: 2, url: "https://example.com", windowId: 2 },
+    ]);
+    const res = await handle({ type: "closeDups" }, sender(1));
+    expect(res).toEqual({ ok: true, count: 0, notice: "No duplicates" });
+    expect(state.removed).toEqual([]);
+});
+
+test("closeDups singular notice for a single duplicate", async () => {
+    const { handle, sender } = await setup([
+        { id: 1, url: "https://a.com" },
+        { id: 2, url: "https://a.com" },
+    ]);
+    const res = await handle({ type: "closeDups" }, sender(1));
+    expect(res.notice).toBe("Closed 1 duplicate");
+});
+
 test("onMessage listener responds asynchronously and returns true", async () => {
     const { state } = await setup([{ id: 1 }]);
     const res = await new Promise<TabzResponse>((resolve) => {

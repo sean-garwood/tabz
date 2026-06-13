@@ -16,6 +16,7 @@ const ACTION_COMMANDS: Record<TabzAction, CommandFactory> = {
     ungroup: () => ({ type: "ungroup" }),
     dissolveGroup: () => ({ type: "dissolveGroup" }),
     regexClose: () => ({ type: "prompt" }),
+    closeDups: () => ({ type: "closeDups" }),
     readingListAdd: () => ({ type: "readingListAdd" }),
     readingListRemove: () => ({ type: "readingListRemove" }),
 };

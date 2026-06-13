@@ -10,6 +10,7 @@ const ACTION_LABELS: Record<TabzAction, string> = {
     ungroup: "Remove tab from its group",
     dissolveGroup: "Dissolve tab's group",
     regexClose: "Open the regex-close prompt",
+    closeDups: "Close duplicate tabs",
     readingListAdd: "Add tab to the reading list",
     readingListRemove: "Remove tab from the reading list",
 };
