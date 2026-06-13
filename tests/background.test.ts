@@ -576,7 +576,10 @@ test("setConfig rejects an unknown action", async () => {
     };
     config.keys["closeAll"] = "z";
     const res = await handle({ type: "setConfig", config });
-    expect(res).toEqual({ ok: false, notice: 'Unknown action "closeAll"' });
+    expect(res).toEqual({
+        ok: false,
+        notice: 'Unknown or unsupported action "closeAll" (not available in this browser)',
+    });
 });
 
 test("validateConfig reports errors without persisting anything", async () => {

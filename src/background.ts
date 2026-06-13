@@ -1,6 +1,8 @@
 import { configDefaults, effectiveConfig, validateConfig } from "./config.js";
+import { detectCapabilities } from "./capabilities.js";
 
 const NO_GROUP = -1;
+const caps = detectCapabilities();
 
 type GroupColor = `${chrome.tabGroups.Color}`;
 
@@ -155,6 +157,11 @@ async function handleMessage(
         }
 
         case "createGroup": {
+            if (!caps.hasTabGroups)
+                return {
+                    ok: false,
+                    notice: "Tab groups are not supported in this browser",
+                };
             const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
             const title = groupTitleFor(tab.url ?? "");
             await chrome.tabGroups.update(groupId, {
@@ -165,6 +172,11 @@ async function handleMessage(
         }
 
         case "joinGroup": {
+            if (!caps.hasTabGroups)
+                return {
+                    ok: false,
+                    notice: "Tab groups are not supported in this browser",
+                };
             const groupId = findNearestGroupId(tabs, tab.index);
             if (groupId === NO_GROUP)
                 return { ok: false, notice: "No group nearby" };
@@ -180,6 +192,11 @@ async function handleMessage(
             return { ok: true };
 
         case "dissolveGroup": {
+            if (!caps.hasTabGroups)
+                return {
+                    ok: false,
+                    notice: "Tab groups are not supported in this browser",
+                };
             if (tab.groupId === NO_GROUP)
                 return { ok: false, notice: "Not in a group" };
             const members = tabs.filter((t) => t.groupId === tab.groupId);
@@ -192,6 +209,11 @@ async function handleMessage(
         }
 
         case "readingListAdd": {
+            if (!caps.hasReadingList)
+                return {
+                    ok: false,
+                    notice: "Reading list is not supported in this browser",
+                };
             if (!isReadingListUrl(tab.url))
                 return {
                     ok: false,
@@ -209,6 +231,11 @@ async function handleMessage(
         }
 
         case "readingListRemove": {
+            if (!caps.hasReadingList)
+                return {
+                    ok: false,
+                    notice: "Reading list is not supported in this browser",
+                };
             if (!isReadingListUrl(tab.url))
                 return { ok: true, notice: "Not in reading list" };
             const entries = await chrome.readingList.query({ url: tab.url });

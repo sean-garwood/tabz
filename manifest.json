@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "minimum_chrome_version": "120",
   "description": "Vim-style tab management that coexists with Vimium: move, group, regex-close, and read-later tabs. Configurable keys; no data collected.",
-  "permissions": ["tabs", "tabGroups", "storage", "readingList"],
+  "permissions": ["tabs", "storage"],
+  "optional_permissions": ["tabGroups", "readingList"],
   "background": {
     "service_worker": "dist/background.js",
     "type": "module"

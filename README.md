@@ -15,15 +15,22 @@ any of its keys, and every binding is configurable.
 
 ## Install
 
-Requires Chrome 120 or newer (the reading-list API).
+Requires Chrome 120 or newer (the reading-list API) for full feature support. Basic functionality (move, regex-close, close duplicates) is available on Firefox with tab grouping and reading list features disabled.
+
+### Chrome
 
 1. `npm install && npm run build` (compiles `src/` to `dist/`)
 2. Open `chrome://extensions`
 3. Enable **Developer mode**
 4. Click **Load unpacked** and select this repo's root directory
 
-After rebuilding or editing `manifest.json`, click the refresh icon on the
-extension card. Content script changes take effect on the next page load.
+### Firefox
+
+1. `npm install && npm run build` (compiles `src/` to `dist/`)
+2. Open `about:debugging#/runtime/this-firefox`
+3. Click **Load Temporary Add-on** and select any file in this repo's directory
+
+After rebuilding or editing `manifest.json`, reload the extension.
 
 ## Keys
 
@@ -144,11 +151,23 @@ Tabz also ignores keystrokes in text inputs, editable elements, and during
 IME composition, and stands down for any key carrying `Ctrl`, `Alt`, or
 `Meta`.
 
+## Firefox Support
+
+Tabz works on Firefox (90+) with some limitations due to differences in the WebExtensions API:
+
+- **Tab groups** are not available in Firefox (both creation and UI features are disabled)
+- **Reading list** is not available in Firefox (reading list actions are disabled)
+- **Basic tab movement** (move left/right, move to edges) works normally
+- **Regex-based tab closing** works normally
+- **Duplicate tab closing** works normally
+- **Configuration** and **key bindings** work normally
+
+When running on Firefox, the options page will show warnings that tab grouping and reading list features are unavailable. Key bindings for these features (default: `c`, `a`, `q`, `Q`, `A`, `D`) can still be customized but will not function. Consider rebinding these keys to other features or leaving them empty.
+
 ## Privacy
 
-- Permissions are `tabs` (read tab URL/title to move, match, and name
-  groups), `tabGroups` (create and edit groups), `storage` (persist your key
-  bindings), and `readingList` (add and remove the current page). That is the
+- Permissions are `tabs` (read tab URL/title to move and match tabs), `storage` (persist your key
+  bindings), and optionally `tabGroups` and `readingList` on Chrome (create and edit groups; add and remove the current page). That is the
   entire list.
 - The content script is a key listener; the only DOM it ever touches is its
   own HUD overlay, isolated in a shadow root.

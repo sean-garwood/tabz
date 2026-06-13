@@ -3,6 +3,8 @@
 // background.ts; the content script and options page reach this logic through
 // getConfig / validateConfig / setConfig messages.
 
+import { detectCapabilities } from "./capabilities.js";
+
 // Schema for TabzConfig fields; both parseConfig (lenient, for stored data)
 // and validateConfig (strict, for options-page submissions) enforce it.
 // Digits 1-9 are reserved for count prefixes, and "0" would shadow a count in
@@ -99,8 +101,41 @@ function parseConfig(defaults: TabzConfig, stored: unknown): ParsedConfig {
     return { config, warnings };
 }
 
+// Filters out browser-unsupported actions from a config based on
+// runtime capabilities. Returns a new config with unavailable actions removed.
+function filterConfigByCapabilities(
+    config: TabzConfig,
+    caps: ReturnType<typeof detectCapabilities>,
+): TabzConfig {
+    const filtered: Record<string, string> = {};
+
+    for (const [action, key] of Object.entries(config.keys)) {
+        // Only include actions that are available in this browser
+        if (!caps.hasTabGroups) {
+            if (
+                action === "createGroup" ||
+                action === "joinGroup" ||
+                action === "ungroup" ||
+                action === "dissolveGroup"
+            )
+                continue;
+        }
+        if (!caps.hasReadingList) {
+            if (action === "readingListAdd" || action === "readingListRemove")
+                continue;
+        }
+        filtered[action] = key;
+    }
+
+    return {
+        leader: config.leader,
+        keys: filtered as Record<TabzAction, string>,
+    };
+}
+
 // Strict whole-config check for validateConfig/setConfig messages: every
-// field must satisfy the schema, nothing is silently dropped.
+// field must satisfy the schema, nothing is silently dropped. Validation
+// considers browser capabilities to allow unsupported actions to be rejected.
 export function validateConfig(
     config: unknown,
     defaults: TabzConfig,
@@ -112,9 +147,14 @@ export function validateConfig(
     if (leaderErr) return leaderErr;
     if (typeof keys !== "object" || keys === null)
         return "Config is missing its key map";
+
+    const caps = detectCapabilities();
+    const allowedDefaults = filterConfigByCapabilities(defaults, caps);
+
     for (const action of Object.keys(keys))
-        if (!(action in defaults.keys)) return `Unknown action "${action}"`;
-    for (const action of Object.keys(defaults.keys)) {
+        if (!(action in allowedDefaults.keys))
+            return `Unknown or unsupported action "${action}" (not available in this browser)`;
+    for (const action of Object.keys(allowedDefaults.keys)) {
         const err = fieldError(
             CONFIG_SCHEMA.key,
             action,
@@ -137,6 +177,25 @@ export function configDefaults(): Promise<TabzConfig> {
 export async function effectiveConfig(
     defaults: TabzConfig,
 ): Promise<ParsedConfig> {
+    const caps = detectCapabilities();
     const stored = await chrome.storage.sync.get("config");
-    return parseConfig(defaults, stored["config"]);
+    const { config, warnings } = parseConfig(defaults, stored["config"]);
+    // Filter out browser-unsupported actions
+    const filtered = filterConfigByCapabilities(config, caps);
+
+    // Report warnings if features were unavailable
+    const unavailableWarnings: string[] = [];
+    if (!caps.hasTabGroups)
+        unavailableWarnings.push(
+            "Tab grouping features are not supported in this browser",
+        );
+    if (!caps.hasReadingList)
+        unavailableWarnings.push(
+            "Reading list features are not supported in this browser",
+        );
+
+    return {
+        config: filtered,
+        warnings: [...warnings, ...unavailableWarnings],
+    };
 }
