@@ -21,6 +21,8 @@ const COMMAND_MESSAGES = {
     "move-right": { type: "move", delta: 1 },
     "create-group": { type: "createGroup" },
     ungroup: { type: "ungroup" },
+    "reading-list-add": { type: "readingListAdd" },
+    "reading-list-remove": { type: "readingListRemove" },
 } as const satisfies Record<string, TabzMessage>;
 
 type CommandName = keyof typeof COMMAND_MESSAGES;
@@ -82,6 +84,12 @@ function filterByPattern(tabs: ResolvedTab[], pattern: string): ResolvedTab[] {
 
 function plural(n: number, word: string): string {
     return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+// The reading list accepts only http(s) URLs; Chrome rejects anything else
+// (chrome://, file://, about:) with a thrown error.
+function isReadingListUrl(url: string | undefined): url is string {
+    return url !== undefined && /^https?:\/\//.test(url);
 }
 
 function isResolvedTab(tab: chrome.tabs.Tab): tab is ResolvedTab {
@@ -180,6 +188,33 @@ async function handleMessage(
                 ok: true,
                 notice: `Ungrouped ${plural(members.length, "tab")}`,
             };
+        }
+
+        case "readingListAdd": {
+            if (!isReadingListUrl(tab.url))
+                return {
+                    ok: false,
+                    notice: "Reading list only accepts http(s) pages",
+                };
+            const entries = await chrome.readingList.query({ url: tab.url });
+            if (entries.length)
+                return { ok: true, notice: "Already in reading list" };
+            await chrome.readingList.addEntry({
+                url: tab.url,
+                title: tab.title || tab.url,
+                hasBeenRead: false,
+            });
+            return { ok: true, notice: "Added to reading list" };
+        }
+
+        case "readingListRemove": {
+            if (!isReadingListUrl(tab.url))
+                return { ok: true, notice: "Not in reading list" };
+            const entries = await chrome.readingList.query({ url: tab.url });
+            if (!entries.length)
+                return { ok: true, notice: "Not in reading list" };
+            await chrome.readingList.removeEntry({ url: tab.url });
+            return { ok: true, notice: "Removed from reading list" };
         }
 
         case "countMatches":

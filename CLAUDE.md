@@ -7,13 +7,15 @@ Vimium without key conflicts.
 ## Architecture
 
 MV3 extension:
-- `manifest.json`: declares permissions (`tabs`, `tabGroups`, `storage`; no host
-  permissions, no `<all_urls>`), registers service worker, content script,
-  options page, and `chrome.commands` entries
+- `manifest.json`: declares permissions (`tabs`, `tabGroups`, `storage`,
+  `readingList`; no host permissions, no `<all_urls>`), registers service
+  worker, content script, options page, and `chrome.commands` entries;
+  `minimum_chrome_version` is 120, set by the `chrome.readingList` API (the
+  module service worker alone would only need 91)
 - `config.json`: shipped default key bindings (leader + one key per action)
 - `background.ts`: service worker, registered as an ES module (`"type":
-  "module"`; this is what sets `minimum_chrome_version` to 91); owns all
-  `chrome.tabs.*` and `chrome.tabGroups.*` calls; receives messages from
+  "module"`); owns all `chrome.tabs.*`, `chrome.tabGroups.*`, and
+  `chrome.readingList.*` calls; receives messages from
   content script and executes them; serves config to the other surfaces
   (`getConfig` / `validateConfig` / `setConfig` messages)
 - `config.ts`: worker-side ES module imported by `background.ts`; owns the
@@ -37,9 +39,11 @@ tab/group operations go through the service worker via
 
 ## Key constraints
 
-- **Permissions**: `tabs` + `tabGroups` + `storage` only. This is a primary
-  design goal; do not add host permissions or `activeTab`. `storage` exists
-  solely to persist key bindings (`chrome.storage.sync`, key `config`).
+- **Permissions**: `tabs` + `tabGroups` + `storage` + `readingList` only. This
+  is a primary design goal; do not add host permissions or `activeTab`.
+  `storage` exists solely to persist key bindings (`chrome.storage.sync`, key
+  `config`); `readingList` exists solely for the reading-list add/remove
+  actions.
 - **Configurable keys**: leader and per-action keys come from `config.json`
   defaults plus user overrides. Bindable set: `a-z A-Z 0 $ , . ;` (digits 1-9
   are reserved for counts; the leader may not be `0`). Validation lives only in

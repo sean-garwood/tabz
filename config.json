@@ -9,6 +9,8 @@
     "joinGroup": "a",
     "ungroup": "q",
     "dissolveGroup": "Q",
-    "regexClose": "s"
+    "regexClose": "s",
+    "readingListAdd": "A",
+    "readingListRemove": "D"
   }
 }

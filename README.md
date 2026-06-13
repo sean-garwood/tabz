@@ -1,18 +1,21 @@
 # Tabz
 
-Vim-style tab management for Chrome: move tabs, group tabs, and close tabs by
-regex, all from the keyboard. The default keys sit alongside
-[Vimium](https://github.com/philc/vimium) without stealing any of its keys,
-and every binding is configurable.
+Vim-style tab management for Chrome: move tabs, group tabs, close tabs by
+regex, and save tabs to the reading list, all from the keyboard. The default
+keys sit alongside [Vimium](https://github.com/philc/vimium) without stealing
+any of its keys, and every binding is configurable.
 
-- **Minimal permissions**: `tabs`, `tabGroups`, and `storage` (used only to
-  persist your key bindings). No host permissions, no `activeTab`.
+- **Minimal permissions**: `tabs`, `tabGroups`, `storage` (used only to
+  persist your key bindings), and `readingList` (used only for the
+  reading-list keys). No host permissions, no `activeTab`.
 - **Zero runtime dependencies**: nothing from npm ships in the extension.
 - **Nothing sent**: no network requests, no analytics. The only thing ever
   stored is your key config in `chrome.storage.sync`; regex patterns you type
   live in memory for the duration of one message and are then gone.
 
 ## Install
+
+Requires Chrome 120 or newer (the reading-list API).
 
 1. `npm install && npm run build` (compiles `src/` to `dist/`)
 2. Open `chrome://extensions`
@@ -69,6 +72,17 @@ count updates live so you can see the blast radius before committing.
 - Scoped to the current window only
 - Pinned tabs are never closed
 
+### Reading list
+
+| Keys    | Action                                  |
+| ------- | --------------------------------------- |
+| `sA`    | Add the current tab to the reading list |
+| `sD`    | Remove the current tab from it          |
+
+Both are idempotent: adding a page that is already listed and removing one
+that is not are no-ops (a toast tells you which case you hit). Chrome's
+reading list only accepts `http(s)` pages.
+
 `Esc` also cancels a pending key sequence.
 
 ## Configuring keys
@@ -94,7 +108,7 @@ Open the extension's options page: right-click the Tabz icon and pick
 ## Global shortcuts (work on chrome:// pages too)
 
 Content scripts cannot run on `chrome://` pages, the Web Store, or other
-extensions' pages, so the four most useful operations are also exposed as
+extensions' pages, so the most useful operations are also exposed as
 browser-level commands:
 
 | Default key       | Action                       |
@@ -103,8 +117,11 @@ browser-level commands:
 | `Alt+Shift+.`     | Move tab right               |
 | `Alt+Shift+C`     | Group current tab            |
 | `Alt+Shift+Q`     | Ungroup current tab          |
+| (unbound)         | Add tab to reading list      |
+| (unbound)         | Remove tab from reading list |
 
-Rebind them at `chrome://extensions/shortcuts`.
+Rebind them (or bind the unbound ones; Chrome allows at most four suggested
+defaults per extension) at `chrome://extensions/shortcuts`.
 
 ## How Vimium coexistence works
 
@@ -113,8 +130,8 @@ which extension's listener runs first. If Tabz used any key Vimium binds,
 whichever extension won that race would swallow the key, even mid-sequence.
 
 So every key in the default Tabz grammar (`s`, `w`, `e`, `c`, `a`, `q`, `Q`,
-`0`, `$`, and count digits) is chosen to be absent from Vimium's default
-bindings, as a starter *and* as a continuation. Vimium passes them through
+`A`, `D`, `0`, `$`, and count digits) is chosen to be absent from Vimium's
+default bindings, as a starter *and* as a continuation. Vimium passes them through
 untouched no matter who registered first, and Tabz never suppresses a key
 Vimium would have handled. This guarantee only holds for the defaults: if you
 rebind Tabz onto a key Vimium uses (or vice versa), whichever extension wins
@@ -127,8 +144,9 @@ IME composition, and stands down for any key carrying `Ctrl`, `Alt`, or
 ## Privacy
 
 - Permissions are `tabs` (read tab URL/title to move, match, and name
-  groups), `tabGroups` (create and edit groups), and `storage` (persist your
-  key bindings). That is the entire list.
+  groups), `tabGroups` (create and edit groups), `storage` (persist your key
+  bindings), and `readingList` (add and remove the current page). That is the
+  entire list.
 - The content script is a key listener; the only DOM it ever touches is its
   own HUD overlay, isolated in a shadow root.
 - The only stored data is the key config in `chrome.storage.sync`. No

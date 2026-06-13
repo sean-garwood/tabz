@@ -6,6 +6,7 @@ import {
     windowOrder,
     tabById,
     type MockGroup,
+    type MockReadingListEntry,
     type MockTab,
     type MockTabInit,
 } from "./chrome-mock";
@@ -28,8 +29,14 @@ async function setup(
     tabs: MockTabInit[],
     groups?: Record<number, MockGroup>,
     stored?: Record<string, unknown>,
+    readingList?: MockReadingListEntry[],
 ) {
-    const { chrome, state } = createChromeMock({ tabs, groups, stored });
+    const { chrome, state } = createChromeMock({
+        tabs,
+        groups,
+        stored,
+        readingList,
+    });
     vi.stubGlobal("chrome", chrome);
     vi.stubGlobal("fetch", fetchMock);
     vi.resetModules();
@@ -200,6 +207,88 @@ test("dissolveGroup ungroups every member and nothing else", async () => {
     expect(tabById(state, 1).groupId).toBe(-1);
     expect(tabById(state, 2).groupId).toBe(-1);
     expect(tabById(state, 3).groupId).toBe(9);
+});
+
+const READING_TAB: MockTabInit = {
+    id: 1,
+    url: "https://example.com/article",
+    title: "Article",
+};
+
+const READING_ENTRY: MockReadingListEntry = {
+    url: "https://example.com/article",
+    title: "Article",
+    hasBeenRead: false,
+};
+
+test("readingListAdd saves the tab's url and title, unread", async () => {
+    const { state, handle, sender } = await setup([READING_TAB]);
+    const res = await handle({ type: "readingListAdd" }, sender(1));
+    expect(res).toEqual({ ok: true, notice: "Added to reading list" });
+    expect(state.readingList).toEqual([READING_ENTRY]);
+});
+
+test("readingListAdd falls back to the url when the title is empty", async () => {
+    const { state, handle, sender } = await setup([
+        { ...READING_TAB, title: "" },
+    ]);
+    await handle({ type: "readingListAdd" }, sender(1));
+    expect(state.readingList[0].title).toBe("https://example.com/article");
+});
+
+test("readingListAdd is a no-op when the url is already listed", async () => {
+    const { state, handle, sender } = await setup(
+        [READING_TAB],
+        undefined,
+        undefined,
+        [{ ...READING_ENTRY, title: "Saved earlier", hasBeenRead: true }],
+    );
+    const res = await handle({ type: "readingListAdd" }, sender(1));
+    expect(res).toEqual({ ok: true, notice: "Already in reading list" });
+    expect(state.readingList).toEqual([
+        { ...READING_ENTRY, title: "Saved earlier", hasBeenRead: true },
+    ]);
+});
+
+test("readingListAdd rejects non-http(s) pages", async () => {
+    const { state, handle, sender } = await setup([
+        { id: 1, url: "file:///home/me/notes.html" },
+    ]);
+    const res = await handle({ type: "readingListAdd" }, sender(1));
+    expect(res).toEqual({
+        ok: false,
+        notice: "Reading list only accepts http(s) pages",
+    });
+    expect(state.readingList).toEqual([]);
+});
+
+test("readingListRemove deletes only the matching entry", async () => {
+    const other = {
+        url: "https://other.com/",
+        title: "Other",
+        hasBeenRead: false,
+    };
+    const { state, handle, sender } = await setup(
+        [READING_TAB],
+        undefined,
+        undefined,
+        [READING_ENTRY, other],
+    );
+    const res = await handle({ type: "readingListRemove" }, sender(1));
+    expect(res).toEqual({ ok: true, notice: "Removed from reading list" });
+    expect(state.readingList).toEqual([other]);
+});
+
+test("readingListRemove is a no-op when the url is not listed", async () => {
+    const { handle, sender } = await setup([READING_TAB]);
+    const res = await handle({ type: "readingListRemove" }, sender(1));
+    expect(res).toEqual({ ok: true, notice: "Not in reading list" });
+});
+
+test("keyboard command adds the active tab to the reading list", async () => {
+    const { state } = await setup([{ ...READING_TAB, active: true }]);
+    await state.listeners.command!("reading-list-add");
+    expect(state.readingList).toEqual([READING_ENTRY]);
 });
 
 const REGEX_FIXTURE: MockTabInit[] = [
