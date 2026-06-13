@@ -7,6 +7,7 @@ Vimium without key conflicts.
 ## Architecture
 
 MV3 extension:
+
 - `manifest.json`: declares permissions (`tabs`, `tabGroups`, `storage`,
   `readingList`; no host permissions, no `<all_urls>`), registers service
   worker, content script, options page, and `chrome.commands` entries;
@@ -15,7 +16,7 @@ MV3 extension:
 - `config.json`: shipped default key bindings (leader + one or two keys per
   action)
 - `background.ts`: service worker, registered as an ES module (`"type":
-  "module"`); owns all `chrome.tabs.*`, `chrome.tabGroups.*`, and
+"module"`); owns all `chrome.tabs.*`, `chrome.tabGroups.*`, and
   `chrome.readingList.*` calls; receives messages from
   content script and executes them; serves config to the other surfaces
   (`getConfig` / `validateConfig` / `setConfig` messages)
@@ -51,9 +52,9 @@ tab/group operations go through the service worker via
   two characters; the set must be prefix-free (no binding may equal or start
   another). The content-script parser walks a trie built from the bindings.
   Validation lives only in the service worker.
-- **Vimium coexistence**: the *defaults* avoid Vimium's default keys (Vimium
+- **Vimium coexistence**: the _defaults_ avoid Vimium's default keys (Vimium
   owns: `h l i m j k J K g G f F t T x X W r o O b B d u H L gg yy p P / n N v
-  V ? gi gs yt << >> [[ ]] zH zL ge gu`). Users may rebind onto Vimium keys;
+V ? gi gs yt << >> [[ ]] zH zL ge gu`). Users may rebind onto Vimium keys;
   resolving such conflicts is their responsibility, since listener registration
   order between extensions is unspecified and Vimium can swallow a key
   mid-sequence when it wins the race.
