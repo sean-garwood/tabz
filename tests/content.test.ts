@@ -105,6 +105,15 @@ test("group and prompt sequences", () => {
     expect(feedAll(parser, ["s", "s"])[1].command).toEqual({ type: "prompt" });
 });
 
+test("reading list sequences", () => {
+    expect(feedAll(parser, ["s", "A"])[1].command).toEqual({
+        type: "readingListAdd",
+    });
+    expect(feedAll(parser, ["s", "D"])[1].command).toEqual({
+        type: "readingListRemove",
+    });
+});
+
 test("an unknown continuation cancels and passes the key through", () => {
     const results = feedAll(parser, ["s", "x", "w"]);
     expect(results[1]).toEqual({ handled: false });
