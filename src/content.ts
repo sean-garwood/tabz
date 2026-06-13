@@ -169,8 +169,9 @@ function createHud(send: TabzSendFn) {
     function close() {
         clearTimeout(previewTimer);
         prompt = null;
-        if (hud?.host.isConnected) hud.host.remove();
+        const host = hud?.host;
         hud = null;
+        if (host?.isConnected) host.remove();
     }
 
     function toast(text: string) {
