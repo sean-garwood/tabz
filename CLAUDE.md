@@ -12,7 +12,8 @@ MV3 extension:
   worker, content script, options page, and `chrome.commands` entries;
   `minimum_chrome_version` is 120, set by the `chrome.readingList` API (the
   module service worker alone would only need 91)
-- `config.json`: shipped default key bindings (leader + one key per action)
+- `config.json`: shipped default key bindings (leader + one or two keys per
+  action)
 - `background.ts`: service worker, registered as an ES module (`"type":
   "module"`); owns all `chrome.tabs.*`, `chrome.tabGroups.*`, and
   `chrome.readingList.*` calls; receives messages from
@@ -25,11 +26,11 @@ MV3 extension:
 - `messaging.ts`: shared `tabzSendMessage` helper (typed per message via
   `TabzResponseFor`); loaded as a classic script before `content.js` and
   `options.js`, so it is a shared global rather than a module export
-- `content.ts`: thin key listener injected into pages; builds its sequence map
-  from the effective config (rebuilt on `storage.onChanged`); parses key
-  sequences (including count prefixes like `3<key>`); sends messages to service
-  worker; renders the input overlay (single `<input>`, `Enter` to execute,
-  `Esc` to cancel)
+- `content.ts`: thin key listener injected into pages; builds a trie from the
+  effective config (rebuilt on `storage.onChanged`); parses key sequences by
+  walking the trie (including count prefixes like `3<key>`); sends messages to
+  service worker; renders the input overlay (single `<input>`, `Enter` to
+  execute, `Esc` to cancel)
 - `options.html` + `options.ts`: key-binding editor; pure relay to the service
   worker, which is the single source of validation truth
 
@@ -46,8 +47,10 @@ tab/group operations go through the service worker via
   actions.
 - **Configurable keys**: leader and per-action keys come from `config.json`
   defaults plus user overrides. Bindable set: `a-z A-Z 0 $ , . ;` (digits 1-9
-  are reserved for counts; the leader may not be `0`). Validation lives only in
-  the service worker.
+  are reserved for counts; the leader may not be `0`). Each binding is one or
+  two characters; the set must be prefix-free (no binding may equal or start
+  another). The content-script parser walks a trie built from the bindings.
+  Validation lives only in the service worker.
 - **Vimium coexistence**: the *defaults* avoid Vimium's default keys (Vimium
   owns: `h l i m j k J K g G f F t T x X W r o O b B d u H L gg yy p P / n N v
   V ? gi gs yt << >> [[ ]] zH zL ge gu`). Users may rebind onto Vimium keys;

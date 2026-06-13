@@ -18,8 +18,8 @@ const CONFIG_SCHEMA: { leader: FieldRule; key: FieldRule } = {
         expected: "a single letter or one of , . ;",
     },
     key: {
-        pattern: /^[a-zA-Z0$,.;]$/,
-        expected: "a single letter or one of 0 $ , . ;",
+        pattern: /^[a-zA-Z0$,.;]{1,2}$/,
+        expected: "one or two characters from a-z A-Z 0 $ , . ;",
     },
 };
 
@@ -29,13 +29,23 @@ function fieldError(rule: FieldRule, name: string, value: unknown) {
         : `${name} must be ${rule.expected}`;
 }
 
-function duplicateBinding(keys: Record<TabzAction, string>): string | null {
-    const bound = new Map<string, string>();
-    for (const [action, key] of Object.entries(keys)) {
-        const taken = bound.get(key);
-        if (taken) return `${taken} and ${action} are both bound to "${key}"`;
-        bound.set(key, action);
-    }
+// Sequences must be prefix-free: a binding that equals or starts another
+// binding would make the shorter one fire before the longer one could ever
+// complete, so the trie parser requires that neither case exists.
+function sequenceConflict(keys: Record<TabzAction, string>): string | null {
+    const bound = Object.entries(keys);
+    for (let i = 0; i < bound.length; i++)
+        for (let j = i + 1; j < bound.length; j++) {
+            const [action, seq] = bound[i];
+            const [other, otherSeq] = bound[j];
+            if (seq === otherSeq)
+                return `${action} and ${other} are both bound to "${seq}"`;
+            if (seq.startsWith(otherSeq) || otherSeq.startsWith(seq))
+                return (
+                    `${action} ("${seq}") and ${other} ("${otherSeq}") ` +
+                    "conflict: one is a prefix of the other"
+                );
+        }
     return null;
 }
 
@@ -79,8 +89,8 @@ function parseConfig(defaults: TabzConfig, stored: unknown): ParsedConfig {
     }
 
     // Individually valid overrides can still collide with each other or with
-    // an untouched default; the merged result must stay conflict-free.
-    const conflict = duplicateBinding(config.keys);
+    // an untouched default; the merged result must stay prefix-free.
+    const conflict = sequenceConflict(config.keys);
     if (conflict)
         return {
             config: { leader: defaults.leader, keys: { ...defaults.keys } },
@@ -112,7 +122,7 @@ export function validateConfig(
         );
         if (err) return err;
     }
-    return duplicateBinding(keys as Record<TabzAction, string>);
+    return sequenceConflict(keys as Record<TabzAction, string>);
 }
 
 let defaultsPromise: Promise<TabzConfig> | undefined;

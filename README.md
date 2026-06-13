@@ -27,9 +27,10 @@ extension card. Content script changes take effect on the next page load.
 
 ## Keys
 
-All sequences start with a leader (`s` by default) followed by one key.
-Press the keys in order (like vim), not as a chord. The tables below show the
-defaults; see [Configuring keys](#configuring-keys) to change any of them.
+All sequences start with a leader (`s` by default) followed by one or two
+keys. Press the keys in order (like vim), not as a chord. The tables below
+show the defaults; see [Configuring keys](#configuring-keys) to change any of
+them.
 
 ### Move
 
@@ -93,11 +94,13 @@ Open the extension's options page: right-click the Tabz icon and pick
 `chrome-extension://<extension-id>/options.html`).
 
 - The leader and every action key can be rebound. Allowed keys: `a-z`, `A-Z`,
-  `0`, `$`, comma, period, semicolon. Digits 1-9 are reserved for count
-  prefixes, and the leader may not be `0` (it would break counts).
-- Every edit is validated live, and again before saving; duplicate bindings
-  and disallowed keys are rejected. A binding may equal the leader (that is
-  how the default `ss` regex prompt works).
+  `0`, `$`, comma, period, semicolon. Each binding is one or two characters.
+  Digits 1-9 are reserved for count prefixes, and the leader may not be `0`
+  (it would break counts).
+- Every edit is validated live, and again before saving; duplicate bindings,
+  prefix conflicts, and disallowed keys are rejected. A binding may equal the
+  leader (that is how the default `ss` regex prompt works). No binding may be
+  a prefix of another (e.g. `c` and `cg` would conflict).
 - Defaults ship in [`config.json`](config.json); your changes are stored in
   `chrome.storage.sync` and follow your Chrome profile. **Reset to defaults**
   puts everything back.

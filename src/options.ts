@@ -28,7 +28,7 @@ function bindingRow(action: TabzAction, key: string): HTMLTableRowElement {
 
     const cell = document.createElement("td");
     const input = document.createElement("input");
-    input.maxLength = 1;
+    input.maxLength = 2;
     input.autocomplete = "off";
     input.spellcheck = false;
     input.dataset.action = action;

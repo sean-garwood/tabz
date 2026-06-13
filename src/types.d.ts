@@ -20,10 +20,11 @@ type TabzAction =
     | "readingListAdd"
     | "readingListRemove";
 
-// Leader and keys are single characters from the bindable set; that constraint
-// lives in the service worker's config schema (CONFIG_SCHEMA in config.ts)
-// because the values arrive at runtime from JSON and user input, where the
-// type system cannot enforce it.
+// The leader is a single character and each key is a one-or-two character
+// sequence from the bindable set, prefix-free across actions; those
+// constraints live in the service worker's config schema (CONFIG_SCHEMA in
+// config.ts) because the values arrive at runtime from JSON and user input,
+// where the type system cannot enforce them.
 interface TabzConfig {
     leader: string;
     keys: Record<TabzAction, string>;

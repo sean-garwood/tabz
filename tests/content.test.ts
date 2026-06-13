@@ -114,6 +114,82 @@ test("reading list sequences", () => {
     });
 });
 
+test("a two-key binding executes after the full walk", () => {
+    const config = defaultConfig();
+    config.keys.createGroup = "cg";
+    const custom = makeParser(config).parser;
+    const results = feedAll(custom, ["s", "c", "g"]);
+    expect(results[1]).toEqual({ handled: true });
+    expect(results[2]).toEqual({
+        handled: true,
+        command: { type: "createGroup" },
+    });
+});
+
+test("two-key bindings can share a first key", () => {
+    const config = defaultConfig();
+    config.keys.moveLeft = "gw";
+    config.keys.moveRight = "ge";
+    const custom = makeParser(config).parser;
+    expect(feedAll(custom, ["s", "g", "w"])[2].command).toEqual({
+        type: "move",
+        delta: -1,
+    });
+    expect(feedAll(custom, ["s", "g", "e"])[2].command).toEqual({
+        type: "move",
+        delta: 1,
+    });
+});
+
+test("counts apply to two-key bindings: s3gw moves left by three", () => {
+    const config = defaultConfig();
+    config.keys.moveLeft = "gw";
+    const custom = makeParser(config).parser;
+    expect(feedAll(custom, ["s", "3", "g", "w"])[3].command).toEqual({
+        type: "move",
+        delta: -3,
+    });
+});
+
+test("a digit mid-sequence cancels instead of extending the count", () => {
+    const config = defaultConfig();
+    config.keys.moveLeft = "gw";
+    const custom = makeParser(config).parser;
+    const results = feedAll(custom, ["s", "g", "3", "w"]);
+    expect(results[2]).toEqual({ handled: false });
+    expect(results[3]).toEqual({ handled: false });
+});
+
+test("an unknown continuation mid-walk cancels and passes through", () => {
+    const config = defaultConfig();
+    config.keys.moveLeft = "gw";
+    const custom = makeParser(config).parser;
+    const results = feedAll(custom, ["s", "g", "x", "w"]);
+    expect(results[1]).toEqual({ handled: true });
+    expect(results[2]).toEqual({ handled: false });
+    expect(results[3]).toEqual({ handled: false });
+});
+
+test("a partial walk times out", () => {
+    const config = defaultConfig();
+    config.keys.moveLeft = "gw";
+    const custom = makeParser(config);
+    custom.parser.feed("s");
+    custom.parser.feed("g");
+    custom.tick(3000);
+    expect(custom.parser.feed("w")).toEqual({ handled: false });
+});
+
+test("Escape cancels a partial walk and is suppressed", () => {
+    const config = defaultConfig();
+    config.keys.moveLeft = "gw";
+    const custom = makeParser(config).parser;
+    custom.feed("s");
+    custom.feed("g");
+    expect(custom.feed("Escape")).toEqual({ handled: true });
+    expect(custom.feed("w")).toEqual({ handled: false });
+});
+
 test("an unknown continuation cancels and passes the key through", () => {
     const results = feedAll(parser, ["s", "x", "w"]);
     expect(results[1]).toEqual({ handled: false });
@@ -179,15 +255,17 @@ test("a missing binding is ignored rather than matched", () => {
     expect(feedAll(custom, ["s", "c"])[1]).toEqual({ handled: false });
 });
 
-test("markup smuggled into a binding never matches a keystroke", () => {
-    // The worker's schema rejects multi-character values before they reach the
-    // content script; even unsanitized, they map to no real event.key and are
-    // never interpreted as HTML.
+test("markup smuggled into a binding never fires a command", () => {
+    // The worker's schema rejects values with disallowed characters or more
+    // than two chars before they reach the content script. Even if an
+    // unsanitized long string were inserted, no keystroke sequence could
+    // complete the walk to produce a command.
     const config = defaultConfig();
     config.keys.moveLeft = "<script>alert(1)</script>";
     const custom = makeParser(config).parser;
     expect(feedAll(custom, ["s", "w"])[1]).toEqual({ handled: false });
-    expect(feedAll(custom, ["s", "<"])[1]).toEqual({ handled: false });
+    const walkStart = feedAll(custom, ["s", "<"]);
+    expect(walkStart[1].command).toBeUndefined();
 });
 
 test("isEditableTarget recognizes inputs and contenteditable", () => {
