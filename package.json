@@ -4,11 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "dist": "npm run build && zip -r tabz.zip manifest.json config.json options.html options.css dist/",
     "fmt": "prettier --write '**/*.{css,html,json,md,ts}'",
     "pretest": "npm run build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.43",
