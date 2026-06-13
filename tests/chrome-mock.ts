@@ -22,6 +22,12 @@ export interface MockGroup {
     color?: string;
 }
 
+export interface MockReadingListEntry {
+    url: string;
+    title: string;
+    hasBeenRead: boolean;
+}
+
 export interface MockState {
     tabs: MockTab[];
     groups: Record<number, MockGroup>;
@@ -29,6 +35,7 @@ export interface MockState {
     nextGroupId: number;
     focusedWindowId: number;
     stored: Record<string, unknown>;
+    readingList: MockReadingListEntry[];
     listeners: {
         message?: (
             msg: TabzMessage,
@@ -61,10 +68,12 @@ export function createChromeMock({
     tabs = [],
     groups = {},
     stored = {},
+    readingList = [],
 }: {
     tabs?: MockTabInit[];
     groups?: Record<number, MockGroup>;
     stored?: Record<string, unknown>;
+    readingList?: MockReadingListEntry[];
 } = {}) {
     const state: MockState = {
         tabs: [],
@@ -73,6 +82,7 @@ export function createChromeMock({
         nextGroupId: 100,
         focusedWindowId: 1,
         stored: { ...stored },
+        readingList: readingList.map((e) => ({ ...e })),
         listeners: {},
     };
 
@@ -171,6 +181,25 @@ export function createChromeMock({
                     (state.groups[id] = state.groups[id] || {}),
                     info,
                 ),
+        },
+        // Mirrors Chrome's real error behavior (duplicate add and missing
+        // remove both reject), so passing tests prove the worker's query-first
+        // no-op paths never trip them.
+        readingList: {
+            query: async ({ url }: { url?: string } = {}) =>
+                state.readingList
+                    .filter((e) => url === undefined || e.url === url)
+                    .map((e) => ({ ...e })),
+            addEntry: async (entry: MockReadingListEntry) => {
+                if (state.readingList.some((e) => e.url === entry.url))
+                    throw new Error("Duplicate URL.");
+                state.readingList.push({ ...entry });
+            },
+            removeEntry: async ({ url }: { url: string }) => {
+                const at = state.readingList.findIndex((e) => e.url === url);
+                if (at < 0) throw new Error("URL not found.");
+                state.readingList.splice(at, 1);
+            },
         },
         storage: {
             sync: {

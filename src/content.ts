@@ -16,6 +16,8 @@ const ACTION_COMMANDS: Record<TabzAction, CommandFactory> = {
     ungroup: () => ({ type: "ungroup" }),
     dissolveGroup: () => ({ type: "dissolveGroup" }),
     regexClose: () => ({ type: "prompt" }),
+    readingListAdd: () => ({ type: "readingListAdd" }),
+    readingListRemove: () => ({ type: "readingListRemove" }),
 };
 
 function buildSequenceMap(config: TabzConfig): Map<string, CommandFactory> {

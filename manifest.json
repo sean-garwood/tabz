@@ -2,9 +2,9 @@
   "manifest_version": 3,
   "name": "Tabz",
   "version": "0.1.0",
-  "minimum_chrome_version": "91",
-  "description": "Vim-style tab management that coexists with Vimium: move, group, and regex-close tabs. Configurable keys; no data collected.",
-  "permissions": ["tabs", "tabGroups", "storage"],
+  "minimum_chrome_version": "120",
+  "description": "Vim-style tab management that coexists with Vimium: move, group, regex-close, and read-later tabs. Configurable keys; no data collected.",
+  "permissions": ["tabs", "tabGroups", "storage", "readingList"],
   "background": {
     "service_worker": "dist/background.js",
     "type": "module"
@@ -38,6 +38,12 @@
     "ungroup": {
       "suggested_key": { "default": "Alt+Shift+Q" },
       "description": "Remove current tab from its group"
+    },
+    "reading-list-add": {
+      "description": "Add current tab to the reading list"
+    },
+    "reading-list-remove": {
+      "description": "Remove current tab from the reading list"
     }
   }
 }

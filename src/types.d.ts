@@ -16,7 +16,9 @@ type TabzAction =
     | "joinGroup"
     | "ungroup"
     | "dissolveGroup"
-    | "regexClose";
+    | "regexClose"
+    | "readingListAdd"
+    | "readingListRemove";
 
 // Leader and keys are single characters from the bindable set; that constraint
 // lives in the service worker's config schema (CONFIG_SCHEMA in config.ts)
@@ -42,6 +44,8 @@ interface TabzTabMessageMap {
     joinGroup: {};
     ungroup: {};
     dissolveGroup: {};
+    readingListAdd: {};
+    readingListRemove: {};
     countMatches: { pattern: string };
     closeMatches: { pattern: string };
 }
@@ -80,6 +84,8 @@ interface TabzResponseDataMap {
     joinGroup: {};
     ungroup: {};
     dissolveGroup: {};
+    readingListAdd: {};
+    readingListRemove: {};
     countMatches: { count: number };
     closeMatches: { count: number };
     getConfig: { config: TabzConfigPayload };
