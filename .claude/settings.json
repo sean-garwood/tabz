@@ -3,10 +3,26 @@
     "allow": [
       "Bash(npx vitest run *)",
       "Bash(npm test *)",
-      "Bash(npx prettier *)"
+      "Bash(npm run typecheck)",
+      "Bash(npx prettier *)",
+      "Agent(Explore)"
     ]
   },
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'set -o pipefail; npm run typecheck && npm test 2>&1 | tail -25' && echo '{\"systemMessage\": \"typechecks and tests passing\"}' || exit 2",
+            "statusMessage": "Type-checking and running tests...",
+            "timeout": 120,
+            "asyncRewake": true,
+            "rewakeSummary": "Typecheck/test failures detected"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
