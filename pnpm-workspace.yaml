@@ -1,0 +1,4 @@
+allowBuilds:
+  # postinstall only verifies the platform binary, which optionalDependencies
+  # already installs
+  esbuild: false

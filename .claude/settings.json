@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm exec vitest run --reporter=json --silent=passed-only 2>/dev/null | jq '[.testResults[].assertionResults[] | select(.status == \"failed\")]' | grep -v '^\\[\\]$' || true",
+            "command": "pnpm exec vitest run --reporter=json --silent=passed-only >/dev/null 2>&1; jq '[.testResults[].assertionResults[] | select(.status == \"failed\")]' .vitest/json/output.json | grep -v '^\\[\\]$' || true",
             "statusMessage": "Running tests...",
             "timeout": 5
           }
