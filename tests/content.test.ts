@@ -26,11 +26,11 @@ interface ContentExports {
 // No chrome in the sandbox, so the script's install() guard keeps it from
 // wiring up any DOM listeners.
 const { createSequenceParser, isEditableTarget, createHud } =
-    loadScript<ContentExports>(
-        "dist/content.js",
-        {},
-        ["createSequenceParser", "isEditableTarget", "createHud"],
-    );
+    loadScript<ContentExports>("dist/content.js", {}, [
+        "createSequenceParser",
+        "isEditableTarget",
+        "createHud",
+    ]);
 
 function makeParser(config = defaultConfig()) {
     let t = 1000;
@@ -340,11 +340,7 @@ test("blur-during-remove doesn't crash: remove fires blur which re-enters close"
         createHud: (
             send: (msg: TabzMessage) => Promise<TabzResponse>,
         ) => ReturnType<typeof createHud>;
-    }>(
-        "dist/content.js",
-        { document: mockDoc },
-        ["createHud"],
-    );
+    }>("dist/content.js", { document: mockDoc }, ["createHud"]);
 
     const send = async (_msg: TabzMessage): Promise<TabzResponse> => ({
         ok: true,

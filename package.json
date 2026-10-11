@@ -4,18 +4,19 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dist": "npm run build && zip -r tabz.zip manifest.json config.json options.html options.css dist/",
-    "fmt": "prettier --write '**/*.{css,html,json,md,ts}'",
-    "pretest": "npm run build",
+    "dist": "pnpm build && zip -r tabz.zip manifest.json config.json options.html options.css dist/",
+    "fmt": "biome format --write",
+    "pretest": "pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/chrome": "^0.1.43",
     "@types/node": "^25.9.3",
-    "prettier": "^3.8.4",
-    "typescript": "^6.0.3",
-    "vitest": "^3.2.4"
-  }
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "packageManager": "pnpm@12.11.2"
 }
