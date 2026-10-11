@@ -1,10 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pnpm exec vitest run *)",
+      "Bash(pnpm vitest run *)",
       "Bash(pnpm test *)",
       "Bash(pnpm typecheck)",
-      "Bash(pnpm exec biome *)",
+      "Bash(pnpm biome *)",
       "Agent(Explore)"
     ]
   },
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm exec vitest run --reporter=json --silent=passed-only >/dev/null 2>&1; jq '[.testResults[].assertionResults[] | select(.status == \"failed\")]' .vitest/json/output.json | grep -v '^\\[\\]$' || true",
+            "command": "rm -f .vitest/json/output.json; pnpm test --reporter=json --silent=passed-only >/dev/null 2>&1; jq '[.testResults[].assertionResults[] | select(.status == \"failed\")]' .vitest/json/output.json | grep -v '^\\[\\]$' || true",
             "statusMessage": "Running tests...",
             "timeout": 5
           }
