@@ -207,8 +207,8 @@ tabz/
 ```
 
 ```sh
-npm install
-npm test        # builds src/ to dist/, then runs vitest
+pnpm install
+pnpm test       # builds src/ to dist/, then runs vitest
 ```
 
 The service worker compiles to an ES module that tests import with a mocked
@@ -218,13 +218,11 @@ global.
 
 ### Developer Installation
 
-> Note: npm is not good. There is an [open
-> issue](https://github.com/sean-garwood/tabz/issues/28) to replace it.
-
-Assumes `node`/`npm` are installed. Sorry. Feel free to [make it do `make
+Assumes `node` and `pnpm` are installed (`corepack enable pnpm` picks up the
+version pinned in `package.json`). Feel free to [make it do `make
 install`](https://github.com/sean-garwood/tabz/issues/27).
 
-1. `npm install && npm run build` (compiles `src/` to `dist/`)
+1. `pnpm install && pnpm build` (compiles `src/` to `dist/`)
 1. Open `chrome://extensions`
 1. Enable Developer mode
 1. Click Load unpacked and select this repo's root directory

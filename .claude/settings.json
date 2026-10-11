@@ -1,9 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx vitest run *)",
-      "Bash(npm test *)",
-      "Bash(npm run typecheck)",
+      "Bash(pnpm exec vitest run *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm typecheck)",
       "Bash(npx prettier *)",
       "Agent(Explore)"
     ]
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'set -o pipefail; npm run typecheck && npm test 2>&1 | tail -25' && echo '{\"systemMessage\": \"typechecks and tests passing\"}' || exit 2",
+            "command": "bash -c 'set -o pipefail; pnpm typecheck && pnpm test 2>&1 | tail -25' && echo '{\"systemMessage\": \"typechecks and tests passing\"}' || exit 2",
             "statusMessage": "Type-checking and running tests...",
             "timeout": 120,
             "asyncRewake": true,
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx vitest run --reporter=json --silent=passed-only 2>/dev/null | jq '[.testResults[].assertionResults[] | select(.status == \"failed\")]' | grep -v '^\\[\\]$' || true",
+            "command": "pnpm exec vitest run --reporter=json --silent=passed-only 2>/dev/null | jq '[.testResults[].assertionResults[] | select(.status == \"failed\")]' | grep -v '^\\[\\]$' || true",
             "statusMessage": "Running tests...",
             "timeout": 5
           }
