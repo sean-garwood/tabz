@@ -4,7 +4,7 @@
       "Bash(pnpm exec vitest run *)",
       "Bash(pnpm test *)",
       "Bash(pnpm typecheck)",
-      "Bash(npx prettier *)",
+      "Bash(pnpm exec biome *)",
       "Agent(Explore)"
     ]
   },
